@@ -26,7 +26,7 @@ export class Notifier {
             vscode.commands.executeCommand('aiWatchdog.jumpToChat');
             break;
           case '查看变更':
-            vscode.commands.executeCommand('workbench.view.scm');
+            vscode.commands.executeCommand('aiwatchdog.takeover'); // 一键接管：定位最近改动
             break;
         }
       });

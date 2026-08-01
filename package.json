@@ -25,6 +25,10 @@
         "title": "AI Watchdog: 跳转到 AI 对话面板"
       },
       {
+        "command": "aiwatchdog.takeover",
+        "title": "AI Watchdog: 一键接管（定位最近改动）"
+      },
+      {
         "command": "aiWatchdog.clearHistory",
         "title": "AI Watchdog: 清除活动历史"
       },
@@ -141,6 +145,7 @@
     "watch": "node esbuild.js --watch",
     "lint": "eslint src --ext ts",
     "test": "node ./out/test/runTest.js",
+    "test:unit": "node --import tsx --test src/test/unit.test.ts",
     "package": "vsce package"
   },
   "devDependencies": {
@@ -151,6 +156,7 @@
     "@typescript-eslint/parser": "^7.0.0",
     "esbuild": "^0.20.0",
     "eslint": "^8.56.0",
+    "tsx": "^4.19.0",
     "typescript": "^5.3.0"
   },
   "dependencies": {

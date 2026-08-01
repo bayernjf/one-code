@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { AIStatus } from '../monitors/types';
-import { formatDuration } from '../state/activityLog';
+import { formatDuration } from '../util/format';
 
 /**
  * 状态栏指示器

@@ -6,7 +6,8 @@ import { TerminalWatcherMonitor } from './monitors/terminalWatcher';
 import { CopilotWatcherMonitor } from './monitors/copilotWatcher';
 import { ClineWatcherMonitor } from './monitors/clineWatcher';
 import { AIStateMachine } from './state/aiStateMachine';
-import { ActivityLog, formatDuration } from './state/activityLog';
+import { ActivityLog } from './state/activityLog';
+import { formatDuration } from './util/format';
 import { StatusBarIndicator } from './notifications/statusBar';
 import { Notifier } from './notifications/notifier';
 import { SoundPlayer } from './notifications/soundPlayer';
@@ -24,6 +25,7 @@ let desktopNotifier: DesktopNotifier;
 let notificationCoordinator: NotificationCoordinator;
 let activityPanel: ActivityPanel;
 let enabled = true;
+let lastChangedFiles: string[] = [];
 
 export function activate(context: vscode.ExtensionContext): void {
   const config = getConfig();
@@ -31,7 +33,7 @@ export function activate(context: vscode.ExtensionContext): void {
 
   // 初始化核心组件
   stateMachine = new AIStateMachine();
-  activityLog = new ActivityLog();
+  activityLog = new ActivityLog(context);
   statusBar = new StatusBarIndicator();
   notifier = new Notifier();
   soundPlayer = new SoundPlayer();
@@ -62,7 +64,7 @@ export function activate(context: vscode.ExtensionContext): void {
         activityLog.addEvent(
           AIStatus.Done,
           event.source,
-          [],
+          lastChangedFiles,
           duration,
           `AI 完成工作，耗时 ${formatDuration(duration)}`
         );
@@ -130,6 +132,10 @@ function initMonitors(context: vscode.ExtensionContext): void {
         m.onActivity((event: MonitorEvent) => {
           if (enabled) {
             stateMachine.handleEvent(event);
+            // 记录最近改动的文件，供「一键接管」定位
+            if (event.files && event.files.length > 0) {
+              lastChangedFiles = event.files;
+            }
           }
         })
       );
@@ -180,6 +186,13 @@ function registerCommands(context: vscode.ExtensionContext): void {
     })
   );
 
+  // 一键接管：聚焦编辑器并定位到最近变更位置
+  context.subscriptions.push(
+    vscode.commands.registerCommand('aiwatchdog.takeover', () => {
+      takeover();
+    })
+  );
+
   // 清除历史
   context.subscriptions.push(
     vscode.commands.registerCommand('aiWatchdog.clearHistory', () => {
@@ -207,6 +220,28 @@ function registerCommands(context: vscode.ExtensionContext): void {
       );
     })
   );
+}
+
+/** 一键接管：聚焦编辑器并定位到最近变更的文件末尾 */
+async function takeover(): Promise<void> {
+  if (lastChangedFiles.length > 0) {
+    const file = lastChangedFiles[lastChangedFiles.length - 1];
+    try {
+      const doc = await vscode.workspace.openTextDocument(file);
+      const editor = await vscode.window.showTextDocument(doc, { preview: false });
+      const lastLine = Math.max(0, doc.lineCount - 1);
+      const line = doc.lineAt(lastLine);
+      const pos = new vscode.Position(lastLine, line.text.length);
+      editor.selection = new vscode.Selection(pos, pos);
+      editor.revealRange(new vscode.Range(pos, pos), vscode.TextEditorRevealType.InCenter);
+      return;
+    } catch {
+      // 文件无法打开时回退到对话面板
+    }
+  }
+  // 无改动文件记录则聚焦 AI 对话
+  stateMachine.acknowledge();
+  jumpToAIChat();
 }
 
 /** 智能跳转到 AI 对话面板 */

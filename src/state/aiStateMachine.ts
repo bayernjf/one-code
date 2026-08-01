@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { AIStatus, MonitorEvent, MonitorSource, StatusChangeEvent } from '../monitors/types';
+import { computeNextStatus } from './transitions';
 
 /**
  * AI 状态机
@@ -39,50 +40,32 @@ export class AIStateMachine {
   handleEvent(event: MonitorEvent): void {
     const previous = this._status;
 
-    switch (event.type) {
-      case 'activity':
-        if (this._status !== AIStatus.Working) {
-          this._status = AIStatus.Working;
-          this._workingSince = new Date();
-          this._lastSource = event.source;
-          this.emitChange(previous);
-        }
-        break;
+    // 用纯转移函数计算下一状态（无变化返回 null）
+    const next = computeNextStatus(this._status, event.type);
+    if (next === null) {
+      return;
+    }
 
-      case 'done':
-        if (this._status === AIStatus.Working) {
-          this._status = AIStatus.Done;
-          this._lastSource = event.source;
-          this.emitChange(previous);
-          // done 状态持续一段时间后自动回到 idle
-          setTimeout(() => {
-            if (this._status === AIStatus.Done) {
-              const prev = this._status;
-              this._status = AIStatus.Idle;
-              this._workingSince = undefined;
-              this.emitChange(prev);
-            }
-          }, 30000); // 30秒后自动回到 idle
-        }
-        break;
+    this._status = next;
+    this._lastSource = event.source;
 
-      case 'waiting':
-        if (this._status === AIStatus.Working || this._status === AIStatus.Idle) {
-          this._status = AIStatus.Waiting;
-          this._lastSource = event.source;
-          this.emitChange(previous);
-        }
-        break;
-
-      case 'idle':
-        if (this._status !== AIStatus.Idle) {
+    if (event.type === 'activity') {
+      this._workingSince = new Date();
+    } else if (event.type === 'idle') {
+      this._workingSince = undefined;
+    } else if (event.type === 'done') {
+      // done 状态持续一段时间后自动回到 idle
+      setTimeout(() => {
+        if (this._status === AIStatus.Done) {
           const prev = this._status;
           this._status = AIStatus.Idle;
           this._workingSince = undefined;
           this.emitChange(prev);
         }
-        break;
+      }, 30000); // 30秒后自动回到 idle
     }
+
+    this.emitChange(previous);
   }
 
   /** 手动重置状态 */

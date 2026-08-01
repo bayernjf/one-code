@@ -3,15 +3,67 @@ import { ActivityEvent, AIStatus, MonitorSource } from '../monitors/types';
 
 let eventCounter = 0;
 
+const STORAGE_KEY = 'aiWatchdog.activityLog';
+const MAX_EVENTS = 100;
+
+/** 全局持久化用的序列化结构（timestamp 存为毫秒数） */
+interface SerializedEvent {
+  id: string;
+  timestamp: number;
+  status: AIStatus;
+  source: MonitorSource;
+  files: string[];
+  duration?: number;
+  message?: string;
+}
+
 /**
  * 活动日志 - 记录所有 AI 活动历史
+ *
+ * 日志通过 vscode globalState 跨会话持久化，重启 VS Code 后仍可查看历史。
  */
 export class ActivityLog {
   private events: ActivityEvent[] = [];
-  private maxEvents = 100;
+  private context?: vscode.ExtensionContext;
 
   private _onDidChange = new vscode.EventEmitter<void>();
   readonly onDidChange = this._onDidChange.event;
+
+  constructor(context?: vscode.ExtensionContext) {
+    this.context = context;
+    this.load();
+  }
+
+  /** 从 globalState 加载历史 */
+  private load(): void {
+    if (!this.context) {
+      return;
+    }
+    const raw = this.context.globalState.get<SerializedEvent[]>(STORAGE_KEY, []);
+    this.events = raw
+      .map((e) => ({
+        ...e,
+        timestamp: new Date(e.timestamp),
+      }))
+      .filter((e) => e.timestamp instanceof Date && !isNaN(e.timestamp.getTime()));
+  }
+
+  /** 持久化到 globalState */
+  private save(): void {
+    if (!this.context) {
+      return;
+    }
+    const raw: SerializedEvent[] = this.events.map((e) => ({
+      id: e.id,
+      timestamp: e.timestamp.getTime(),
+      status: e.status,
+      source: e.source,
+      files: e.files,
+      duration: e.duration,
+      message: e.message,
+    }));
+    this.context.globalState.update(STORAGE_KEY, raw);
+  }
 
   /** 添加活动记录 */
   addEvent(
@@ -34,10 +86,11 @@ export class ActivityLog {
     this.events.unshift(event); // 最新的在前面
 
     // 限制历史记录数量
-    if (this.events.length > this.maxEvents) {
-      this.events = this.events.slice(0, this.maxEvents);
+    if (this.events.length > MAX_EVENTS) {
+      this.events = this.events.slice(0, MAX_EVENTS);
     }
 
+    this.save();
     this._onDidChange.fire();
     return event;
   }
@@ -55,6 +108,7 @@ export class ActivityLog {
   /** 清除所有历史 */
   clear(): void {
     this.events = [];
+    this.save();
     this._onDidChange.fire();
   }
 
@@ -77,21 +131,6 @@ export class ActivityLog {
   dispose(): void {
     this._onDidChange.dispose();
   }
-}
-
-/** 格式化持续时长 */
-export function formatDuration(ms: number): string {
-  const seconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(seconds / 60);
-  const hours = Math.floor(minutes / 60);
-
-  if (hours > 0) {
-    return `${hours}h ${minutes % 60}m`;
-  }
-  if (minutes > 0) {
-    return `${minutes}m ${seconds % 60}s`;
-  }
-  return `${seconds}s`;
 }
 
 /** 格式化时间戳 */

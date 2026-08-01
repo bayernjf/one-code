@@ -72,23 +72,28 @@ waiting → idle（用户确认）
 - [x] 4 个命令（toggle / jumpToChat / clearHistory / showStatus）
 - [x] esbuild 构建通过
 - [x] TypeScript 类型检查通过（零错误）
+- [x] `.gitignore`（排除 node_modules/ dist/ out/ *.vsix）
+- [x] `git init` + 初始提交
+- [x] `@types/node-notifier` 加入 devDependencies
+- [x] ESLint 配置（.eslintrc.json），`npm run lint` 零错误
+- [x] 通知防抖：新增 NotificationCoordinator，done/waiting 通知 1.5s 窗口合并
+- [x] 活动日志持久化（vscode.globalState，跨会话保存最近 100 条）
+- [x] "一键接管" 命令 `aiwatchdog.takeover`：定位并打开最近改动文件末尾（通知"查看变更"按钮触发）
+- [x] 单元测试：`npm run test:unit`（node:test + tsx），覆盖状态机/滑动窗口/文件过滤/时长格式化
+- [x] 纯逻辑解耦：提取 `monitors/editWindow.ts`、`util/paths.ts`、`state/transitions.ts`、`util/format.ts`（不依赖 vscode，可单测）
 
 ## 待完成
 
 ### 必要项（发布前）
 
-- [ ] 添加 `.gitignore`（排除 node_modules/ dist/ out/）
-- [ ] `git init` + 初始提交
-- [ ] 添加 `@types/node-notifier` 到 devDependencies
-- [ ] 添加 ESLint 配置文件（.eslintrc.json）
-- [ ] 通知防抖：多监控器同时触发 done 时合并为一条通知
+全部完成 ✅
 
 ### 体验增强
 
-- [ ] 活动日志持久化（vscode.globalState）
-- [ ] 多根工作区 fileWatcher 优化
-- [ ] "一键接管"：聚焦编辑器并定位到最近变更位置
-- [ ] 单元测试（状态机、滑动窗口、文件过滤）
+- [x] 活动日志持久化（vscode.globalState）
+- [x] 多根工作区 fileWatcher 优化（VS Code 的 `createFileSystemWatcher('**/...')` 原生覆盖所有 workspace folder，已满足）
+- [x] "一键接管"：聚焦编辑器并定位到最近变更位置
+- [x] 单元测试（状态机、滑动窗口、文件过滤）
 
 ### 发布
 
@@ -104,6 +109,8 @@ waiting → idle（用户确认）
 npm install          # 安装依赖
 npm run build        # 生产构建 → dist/extension.js
 npm run watch        # 开发监听模式
+npm run lint         # ESLint 检查
+npm run test:unit    # 纯逻辑单元测试（node:test + tsx）
 npx tsc --noEmit     # 类型检查
 # F5                 # 在 VS Code 中启动扩展开发宿主调试
 ```

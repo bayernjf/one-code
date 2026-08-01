@@ -1,6 +1,8 @@
 import * as vscode from 'vscode';
 import { IMonitor, MonitorEvent, MonitorSource } from './types';
 import { getConfig } from '../config';
+import { RapidEditDetector } from './editWindow';
+import { shouldIgnorePath } from '../util/paths';
 
 /**
  * 文件系统监控器 - 通用 AI 活动检测核心
@@ -15,7 +17,7 @@ export class FileWatcherMonitor implements IMonitor {
   readonly onActivity = this._onActivity.event;
 
   private watchers: vscode.FileSystemWatcher[] = [];
-  private changeTimestamps: number[] = [];
+  private editDetector: RapidEditDetector | undefined;
   private silenceTimer: NodeJS.Timeout | undefined;
   private isWorking = false;
   private recentFiles: Set<string> = new Set();
@@ -23,6 +25,7 @@ export class FileWatcherMonitor implements IMonitor {
 
   start(): void {
     const config = getConfig();
+    this.editDetector = new RapidEditDetector(config.windowSize * 1000, config.activityThreshold);
     this.createWatchers(config.watchPatterns);
   }
 
@@ -30,7 +33,7 @@ export class FileWatcherMonitor implements IMonitor {
     this.disposeWatchers();
     this.clearSilenceTimer();
     this.isWorking = false;
-    this.changeTimestamps = [];
+    this.editDetector?.reset();
     this.recentFiles.clear();
   }
 
@@ -68,26 +71,23 @@ export class FileWatcherMonitor implements IMonitor {
     }
 
     // 过滤忽略模式
-    if (this.shouldIgnore(uri, config.ignorePatterns)) {
+    if (shouldIgnorePath(uri.fsPath, config.ignorePatterns)) {
       return;
     }
 
     const now = Date.now();
-    this.changeTimestamps.push(now);
-    this.recentFiles.add(this.getRelativePath(uri));
+    // 记录最近变更的绝对路径，供「一键接管」定位
+    this.recentFiles.add(uri.fsPath);
 
-    // 清理窗口外的时间戳
-    const windowMs = config.windowSize * 1000;
-    this.changeTimestamps = this.changeTimestamps.filter((t) => now - t < windowMs);
-
-    // 判定是否进入 working 状态
-    if (this.changeTimestamps.length >= config.activityThreshold && !this.isWorking) {
+    // 滑动窗口检测是否进入 working 状态
+    const triggered = this.editDetector ? this.editDetector.record(now) : false;
+    if (triggered && !this.isWorking) {
       this.isWorking = true;
       this._onActivity.fire({
         source: this.source,
         type: 'activity',
         files: Array.from(this.recentFiles),
-        message: `检测到 AI 活动：${this.changeTimestamps.length} 个文件变更`,
+        message: `检测到 AI 活动：${this.editDetector?.count ?? 0} 个文件变更`,
       });
     }
 
@@ -108,7 +108,7 @@ export class FileWatcherMonitor implements IMonitor {
           message: `AI 活动已停止，涉及 ${files.length} 个文件`,
         });
         this.recentFiles.clear();
-        this.changeTimestamps = [];
+        this.editDetector?.reset();
       }
     }, timeoutSec * 1000);
   }
@@ -121,28 +121,12 @@ export class FileWatcherMonitor implements IMonitor {
   }
 
   private shouldIgnore(uri: vscode.Uri, ignorePatterns: string[]): boolean {
-    const path = uri.fsPath;
-    for (const pattern of ignorePatterns) {
-      // 简单的路径匹配
-      const cleanPattern = pattern.replace(/\*\*/g, '').replace(/\*/g, '');
-      if (path.includes(cleanPattern.replace(/\//g, ''))) {
-        return true;
-      }
-      // 更精确的目录匹配
-      const dirPattern = pattern.replace(/\*\*\//g, '').replace(/\/\*\*/g, '');
-      if (path.includes(dirPattern)) {
-        return true;
-      }
-    }
-    return false;
+    return shouldIgnorePath(uri.fsPath, ignorePatterns);
   }
 
-  private getRelativePath(uri: vscode.Uri): string {
-    const workspaceFolder = vscode.workspace.getWorkspaceFolder(uri);
-    if (workspaceFolder) {
-      return uri.fsPath.replace(workspaceFolder.uri.fsPath + '/', '');
-    }
-    return uri.fsPath;
+  /** 返回最近发生变更的文件（绝对路径），供「一键接管」定位 */
+  getRecentFiles(): string[] {
+    return Array.from(this.recentFiles);
   }
 
   private disposeWatchers(): void {

@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { ActivityLog, formatDuration, formatTime, getSourceName, getStatusIcon } from '../state/activityLog';
+import { ActivityLog, formatTime, getStatusIcon, getSourceName } from '../state/activityLog';
+import { formatDuration } from '../util/format';
 import { ActivityEvent, AIStatus } from '../monitors/types';
 
 /**

@@ -1,4 +1,4 @@
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 
 /** AI 工作状态 */
 export enum AIStatus {

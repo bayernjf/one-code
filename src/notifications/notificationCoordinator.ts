@@ -2,7 +2,8 @@ import { MonitorSource } from '../monitors/types';
 import { Notifier } from './notifier';
 import { SoundPlayer } from './soundPlayer';
 import { DesktopNotifier } from './desktopNotify';
-import { formatDuration, getSourceName } from '../state/activityLog';
+import { formatDuration } from '../util/format';
+import { getSourceName } from '../state/activityLog';
 
 /**
  * 通知协调器
