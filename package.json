@@ -1,0 +1,159 @@
+{
+  "name": "ai-watchdog",
+  "displayName": "AI Watchdog",
+  "description": "监控 AI 编码工具状态，及时通知你回来接管",
+  "version": "0.1.0",
+  "publisher": "ai-watchdog",
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onStartupFinished"
+  ],
+  "main": "./dist/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "aiWatchdog.toggle",
+        "title": "AI Watchdog: 开关监控"
+      },
+      {
+        "command": "aiWatchdog.jumpToChat",
+        "title": "AI Watchdog: 跳转到 AI 对话面板"
+      },
+      {
+        "command": "aiWatchdog.clearHistory",
+        "title": "AI Watchdog: 清除活动历史"
+      },
+      {
+        "command": "aiWatchdog.showStatus",
+        "title": "AI Watchdog: 显示当前状态"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "aiWatchdog",
+          "title": "AI Watchdog",
+          "icon": "resources/watchdog.svg"
+        }
+      ]
+    },
+    "views": {
+      "aiWatchdog": [
+        {
+          "id": "aiWatchdogActivity",
+          "name": "活动历史"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "AI Watchdog",
+      "properties": {
+        "aiWatchdog.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用 AI Watchdog 监控"
+        },
+        "aiWatchdog.silenceTimeout": {
+          "type": "number",
+          "default": 8,
+          "minimum": 3,
+          "maximum": 60,
+          "description": "AI 活动停止后多少秒判定为完成"
+        },
+        "aiWatchdog.activityThreshold": {
+          "type": "number",
+          "default": 3,
+          "minimum": 2,
+          "maximum": 20,
+          "description": "滑动窗口内多少次文件变更判定为 AI 工作中"
+        },
+        "aiWatchdog.windowSize": {
+          "type": "number",
+          "default": 3,
+          "minimum": 1,
+          "maximum": 10,
+          "description": "滑动窗口大小（秒）"
+        },
+        "aiWatchdog.sound.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用声音提示"
+        },
+        "aiWatchdog.sound.volume": {
+          "type": "number",
+          "default": 0.7,
+          "minimum": 0,
+          "maximum": 1,
+          "description": "提示音音量 (0-1)"
+        },
+        "aiWatchdog.desktopNotify.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用桌面通知（VS Code 不在前台时）"
+        },
+        "aiWatchdog.watchPatterns": {
+          "type": "array",
+          "default": [
+            "**/*.{ts,tsx,js,jsx,py,go,rs,java,vue,css,scss,html,json,md,yaml,yml,toml}"
+          ],
+          "description": "监控的文件模式"
+        },
+        "aiWatchdog.ignorePatterns": {
+          "type": "array",
+          "default": [
+            "**/node_modules/**",
+            "**/.git/**",
+            "**/dist/**",
+            "**/build/**",
+            "**/.next/**",
+            "**/coverage/**",
+            "**/__pycache__/**",
+            "**/target/**"
+          ],
+          "description": "忽略的文件模式"
+        },
+        "aiWatchdog.monitors.copilot": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用 GitHub Copilot Chat 监控"
+        },
+        "aiWatchdog.monitors.cline": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用 Cline/Roo Code 监控"
+        },
+        "aiWatchdog.monitors.terminal": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用终端输出监控"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run build",
+    "build": "node esbuild.js --production",
+    "watch": "node esbuild.js --watch",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/node-notifier": "^8.0.5",
+    "@types/vscode": "^1.85.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "esbuild": "^0.20.0",
+    "eslint": "^8.56.0",
+    "typescript": "^5.3.0"
+  },
+  "dependencies": {
+    "node-notifier": "^10.0.1"
+  }
+}
