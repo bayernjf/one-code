@@ -5,7 +5,7 @@ import { DesktopConfig } from './config';
 import { ConfigStore } from './configStore';
 import { discoverWorkspaces } from './workspaceDiscovery';
 import { SettingsWindow } from './settingsWindow';
-import { initAutoUpdater } from './updater';
+import { startAutoUpdater, stopAutoUpdater } from './updater';
 import { FileProbe } from './probes/fileProbe';
 import { ProcessProbe } from './probes/processProbe';
 import { Probe } from './probes/probe';
@@ -148,7 +148,7 @@ function createTray(config: DesktopConfig): void {
 }
 
 app.whenReady().then(() => {
-  initAutoUpdater();
+  startAutoUpdater();
 
   configStore = new ConfigStore();
   const config = configStore.load();
@@ -181,4 +181,5 @@ app.on('window-all-closed', () => {
 
 app.on('will-quit', () => {
   probes.forEach((p) => p.stop());
+  stopAutoUpdater();
 });

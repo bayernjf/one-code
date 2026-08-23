@@ -21,10 +21,24 @@ interface DesktopConfig {
   silenceTimeout: number;
 }
 
+interface UpdaterStatus {
+  currentVersion: string;
+  downloadInProgress: boolean;
+  updateReady: boolean;
+  devMode: boolean;
+}
+
+type UpdaterCheckResult =
+  | { ok: false; reason: string; message?: string }
+  | { ok: true; currentVersion: string; latestVersion: string | null; hasUpdate: boolean };
+
 interface Window {
   settingsAPI: {
     getConfig: () => Promise<DesktopConfig>;
     saveConfig: (config: DesktopConfig) => Promise<boolean>;
+    checkForUpdates: () => Promise<UpdaterCheckResult>;
+    getUpdaterStatus: () => Promise<UpdaterStatus>;
+    quitAndInstall: () => Promise<{ ok: boolean; reason?: string }>;
   };
 }
 
@@ -102,10 +116,54 @@ resetBtn.addEventListener('click', async () => {
   renderSensitivity();
 });
 
+// ---- 关于 / 更新 ----
+const versionEl = document.getElementById('version')!;
+const updateStatusEl = document.getElementById('update-status')!;
+const checkUpdateBtn = document.getElementById('check-update') as HTMLButtonElement;
+const installUpdateBtn = document.getElementById('install-update') as HTMLButtonElement;
+
+async function renderUpdater(): Promise<void> {
+  const status = await window.settingsAPI.getUpdaterStatus();
+  versionEl.textContent = status.devMode ? `${status.currentVersion} (开发模式)` : `v${status.currentVersion}`;
+  installUpdateBtn.disabled = !status.updateReady;
+
+  if (status.updateReady) {
+    updateStatusEl.textContent = '新版本已下载，可重启安装';
+  } else if (status.downloadInProgress) {
+    updateStatusEl.textContent = '正在下载更新…';
+  } else {
+    updateStatusEl.textContent = '';
+  }
+}
+
+checkUpdateBtn.addEventListener('click', async () => {
+  checkUpdateBtn.disabled = true;
+  updateStatusEl.textContent = '正在检查更新…';
+  const result = await window.settingsAPI.checkForUpdates();
+
+  if (result.ok) {
+    if (result.hasUpdate) {
+      updateStatusEl.textContent = `发现新版本 ${result.latestVersion}，开始下载…`;
+    } else {
+      updateStatusEl.textContent = `已是最新版本 (v${result.currentVersion})`;
+    }
+  } else if (result.reason === 'dev-mode') {
+    updateStatusEl.textContent = '开发模式下不检查更新';
+  } else {
+    updateStatusEl.textContent = `检查更新失败：${result.message ?? result.reason}`;
+  }
+  checkUpdateBtn.disabled = false;
+});
+
+installUpdateBtn.addEventListener('click', async () => {
+  await window.settingsAPI.quitAndInstall();
+});
+
 async function init(): Promise<void> {
   config = await window.settingsAPI.getConfig();
   renderTargets();
   renderSensitivity();
+  renderUpdater();
 }
 
 init();
