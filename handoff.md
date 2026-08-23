@@ -55,6 +55,7 @@ VS Code 插件，监控 AI 编码工具（Copilot Chat、Cline/Roo Code、终端
 │           │   └── settings.ts   # 渲染进程逻辑（ESM）
 │           ├── scripts/gen-tray-icon.js # 托盘图标生成脚本（纯 Node，无依赖）
 │           ├── resources/tray/ # 托盘图标 PNG（16/32 @2x，产品 logo）
+│           ├── test/            # 单测：aggregator / fileProbe / processProbe（11 用例）
 │           └── probes/
 │               ├── probe.ts      # 探针接口（宿主无关）
 │               ├── fileProbe.ts  # 文件探针（chokidar + RapidEditDetector）
@@ -125,7 +126,7 @@ waiting → idle（用户确认）
 ### 统一监控产品（下一阶段，见 `design.md`）
 
 - [x] 阶段 1a：core 抽取（纯逻辑解耦为 `@ai-watchdog/core`）
-- [✅] 阶段 1b：Electron 壳 + 托盘 + 设置窗口 + 文件探针 + 进程探针（骨架、目录自动发现、配置持久化、托盘图标、设置窗口 UI 均已完成；待端到端联调）
+- [✅] 阶段 1b：Electron 壳 + 托盘 + 设置窗口 + 文件探针 + 进程探针（骨架、目录自动发现、配置持久化、托盘图标、设置窗口 UI、探针/聚合引擎单测均已完成；ad-hoc 签名解决 Gatekeeper 拦截；electron-builder 打包 mac dmg/zip 已验证通过）
 - [ ] 阶段 2：Shell Hook（zsh）精确终端监控
 - [ ] 阶段 3：Claude Desktop 专用探针（`~/.claude/projects/*.jsonl`）
 - [ ] 阶段 4（可选）：VS Code 扩展改造为"深度模式伴侣"；ChatGPT 浏览器扩展
@@ -162,6 +163,9 @@ npm run typecheck --workspace @ai-watchdog/core # core 包类型检查
 npx tsc --noEmit                      # 扩展侧类型检查
 npm run build --workspace @ai-watchdog/desktop # 桌面应用构建（tsc → dist/）
 npm run start --workspace @ai-watchdog/desktop # 启动桌面应用（托盘）
+npm test --workspace @ai-watchdog/desktop # 桌面应用单测（探针 + 聚合引擎）
+npm run dist:mac --workspace @ai-watchdog/desktop # 打包 macOS 安装包（dmg/zip → release/）
+npm run dist:win --workspace @ai-watchdog/desktop # 打包 Windows 安装包（NSIS exe → release/）
 # F5                                  # 在 VS Code 中启动扩展开发宿主调试
 ```
 
