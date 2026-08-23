@@ -1,7 +1,15 @@
 import { EventEmitter } from 'node:events';
-import { execFile } from 'node:child_process';
+import { execFile as execFileImpl } from 'node:child_process';
 import { MonitorSource, MonitorEvent } from '@ai-watchdog/core';
 import { Probe } from './probe';
+
+/** execFile 签名（便于测试注入 mock） */
+type ExecFileFn = (
+  cmd: string,
+  args: string[],
+  options: { maxBuffer: number },
+  callback: (err: Error | null, stdout: string) => void
+) => void;
 
 /**
  * 进程探针 - 检测目标应用进程是否活跃
@@ -20,7 +28,8 @@ export class ProcessProbe implements Probe {
 
   constructor(
     private processPatterns: string[],
-    private intervalMs: number = 3000
+    private intervalMs: number = 3000,
+    private execFile: ExecFileFn = execFileImpl
   ) {}
 
   start(): void {
@@ -44,7 +53,7 @@ export class ProcessProbe implements Probe {
   }
 
   private poll(): void {
-    execFile('ps', ['-axo', 'comm'], { maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
+    this.execFile('ps', ['-axo', 'comm'], { maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
       if (err) {
         return;
       }
