@@ -83,12 +83,29 @@
 
 备选 Tauri（更轻）—— 但需 Rust 重写逻辑，当前阶段不建议。
 
+### 为什么选 Electron 而非 Tauri
+
+**核心是"复用现有 TS 资产"的取舍**，按对本项目的重要性排序：
+
+1. **代码复用率最高（决定性）**：现有纯逻辑层已是 TypeScript，Electron 主进程即 Node + TS，几乎原样迁移即可运行，`node-notifier` 直接可用。Tauri 后端为 Rust，需将状态机、滑动窗口、路径匹配、防抖全部重写一遍，且引入"两套实现需保持一致"的长期维护负担。
+
+2. **系统探针生态是 Node 的**：文件监控（chokidar）、进程表/CPU/IO（`ps`/原生模块）、macOS 窗口标题/AX API（`osascript`）、Shell Hook 状态文件读取——Node 生态全现成；Tauri 需在 Rust 侧重新实现或经 FFI 桥回 JS。
+
+3. **打包/跨平台心智成本更低**：electron-builder 一套配置覆盖 macOS/Windows/Linux；Tauri 需 Rust 工具链 + 各平台系统 webview 依赖（Linux 尤需 WebKitGTK）。
+
+**Tauri 的优势（权衡后放弃）**：产物小、内存低、启动快。但常驻托盘监控器本就该低频、小内存（文件监听 + 进程表轮询，几十 MB 内），Tauri 的"轻"发挥不出优势，却要付出 Rust 重写全部逻辑的成本。
+
+**结论**：阶段 1b 目标是快速落地、复用代码 > 省几十 MB 内存，故选 Electron。
+
+**未来切换边界**：若需"极致低占用、开机自启、无感知后台守护"且愿意以 Rust 重写核心逻辑，则 Tauri（或纯 Rust + tray-icon）更优。
+
 ## 7. 分阶段路线图
 
 | 阶段 | 内容 | 完成后效果 |
 |---|---|---|
 | **1. 骨架** | Electron 壳 + 托盘 + 设置页；现有纯逻辑迁为 `core` 包；文件探针 + 进程探针 | 覆盖所有"写文件"的工具：VS Code、Cursor、Claude Code、终端里的任何 AI（约 90% 诉求） |
 | **1a. core 抽取（✅ 已完成）** | `packages/core` 包：`types`/`transitions`/`format`/`paths`/`editWindow` + 单测；npm workspaces 打通扩展侧引用 | 纯逻辑与 vscode 解耦，可被 Electron 复用 |
+| **1b. 桌面骨架（✅ 已完成）** | `packages/desktop`：Electron 主进程 + 托盘 + 聚合引擎 + 设置窗口；文件探针（chokidar + RapidEditDetector）+ 进程探针 + 目录自动发现 + 配置持久化 + 产品 logo 托盘图标 | 可编译运行，完整设置 UI；待：端到端联调 |
 | **2. Shell Hook** | zsh 集成（precmd/preexec 写状态文件，守护进程消费） | 终端监控从"不可用"变"精确" |
 | **3. Claude Desktop** | `~/.claude/projects/*.jsonl` 追加检测探针 | Claude 勾选项完整可用 |
 | **4. 伴侣与扩展（可选）** | 现有 VS Code 扩展改造为"深度模式伴侣"（本地 socket 上报信号）；ChatGPT 浏览器扩展 | 深度信号 + 网页版覆盖 |
@@ -118,7 +135,6 @@ one-code/
 
 ## 10. 开放问题（待决策）
 
-- [ ] 已迁到 core 的 5 个旧文件（`src/state/transitions.ts`、`src/util/format.ts`、`src/util/paths.ts`、`src/monitors/editWindow.ts`、`src/test/unit.test.ts`）现已成孤儿、与 core 重复，待用户确认后删除
 - [ ] 多工作区目录的自动发现策略（最近活跃？固定列表？）
 - [ ] Shell Hook 的安装引导流程（一键写入 zshrc？）
 - [ ] Claude jsonl 解析的健壮性（格式未官方承诺，需灰度验证）
