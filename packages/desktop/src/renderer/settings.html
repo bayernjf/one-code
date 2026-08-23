@@ -108,6 +108,8 @@
     }
     #save:disabled { opacity: 0.5; cursor: default; }
     #reset { background: transparent; color: var(--muted); border: 1px solid var(--border); }
+    .secondary { background: var(--panel); color: var(--text); border: 1px solid var(--border); }
+    .secondary:disabled { opacity: 0.5; cursor: default; }
     .hint { color: var(--muted); font-size: 12px; margin-top: 4px; }
   </style>
 </head>
@@ -138,6 +140,19 @@
         <input type="number" id="silenceTimeout" min="3" max="60" />
       </div>
       <div class="hint">窗口内文件变更达到阈值判定为「工作中」，静默超过超时判定为「完成」。</div>
+    </section>
+
+    <section>
+      <h2>关于 / 更新</h2>
+      <div class="form-row">
+        <span class="target-name">当前版本</span>
+        <span id="version">—</span>
+      </div>
+      <div id="update-status" class="hint"></div>
+      <div style="margin-top: 12px; display: flex; gap: 10px;">
+        <button id="check-update" class="secondary">检查更新</button>
+        <button id="install-update" class="secondary" disabled>重启安装</button>
+      </div>
     </section>
   </main>
 

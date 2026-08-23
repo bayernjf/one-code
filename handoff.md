@@ -126,7 +126,7 @@ waiting → idle（用户确认）
 ### 统一监控产品（下一阶段，见 `design.md`）
 
 - [x] 阶段 1a：core 抽取（纯逻辑解耦为 `@ai-watchdog/core`）
-- [✅] 阶段 1b：Electron 壳 + 托盘 + 设置窗口 + 文件探针 + 进程探针（骨架、目录自动发现、配置持久化、托盘图标、设置窗口 UI、探针/聚合引擎单测均已完成；ad-hoc 签名解决 Gatekeeper 拦截；electron-builder 打包 mac dmg/zip 已验证通过；release 工作流 + electron-updater 自动更新已就绪）
+- [✅] 阶段 1b：Electron 壳 + 托盘 + 设置窗口 + 文件探针 + 进程探针（骨架、目录自动发现、配置持久化、托盘图标、设置窗口 UI、探针/聚合引擎单测均已完成；ad-hoc 签名解决 Gatekeeper 拦截；electron-builder 打包 mac dmg/zip 已验证通过；release 工作流 + electron-updater 自动更新（含完整事件流 + IPC + 设置页更新 UI，对齐 soft-desk）已就绪）
 - [ ] 阶段 2：Shell Hook（zsh）精确终端监控
 - [ ] 阶段 3：Claude Desktop 专用探针（`~/.claude/projects/*.jsonl`）
 - [ ] 阶段 4（可选）：VS Code 扩展改造为"深度模式伴侣"；ChatGPT 浏览器扩展
