@@ -1,6 +1,6 @@
 {
   "name": "@ai-watchdog/desktop",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "AI Watchdog desktop app: cross-product monitoring daemon (Electron tray)",
   "author": "AI Watchdog",
   "main": "dist/main.js",
