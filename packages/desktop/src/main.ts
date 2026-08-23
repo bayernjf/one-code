@@ -10,6 +10,7 @@ import { startAutoUpdater, stopAutoUpdater } from './updater';
 import { FileProbe } from './probes/fileProbe';
 import { ProcessProbe } from './probes/processProbe';
 import { ShellHookProbe } from './probes/shellHookProbe';
+import { ClaudeSessionProbe } from './probes/claudeSessionProbe';
 import { Probe } from './probes/probe';
 import { Aggregator } from './aggregator';
 import { ShellHookManager, zshrcPath } from './shellHook/manager';
@@ -66,6 +67,13 @@ function buildProbes(config: DesktopConfig): Probe[] {
   if (config.shellHook.enabled) {
     probes.push(new ShellHookProbe(config.shellHook.stateFile));
     console.log(`[shell-hook] watching state file: ${config.shellHook.stateFile}`);
+  }
+
+  // Claude 会话 jsonl 探针：跟随「Claude」监控目标勾选状态
+  const claudeTarget = config.targets.find((t) => t.id === 'claude');
+  if (claudeTarget?.enabled) {
+    probes.push(new ClaudeSessionProbe(config.claude.projectsDir, config.silenceTimeout));
+    console.log(`[claude] watching sessions dir: ${config.claude.projectsDir}`);
   }
 
   return probes;

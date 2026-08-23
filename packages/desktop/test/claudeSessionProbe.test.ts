@@ -1,0 +1,147 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {
+  classifyClaudeAppend,
+  ClaudeSessionProbe,
+  isClaudeQuestion,
+  parseClaudeLine,
+} from '../src/probes/claudeSessionProbe';
+
+function assistantLine(text: string): string {
+  return JSON.stringify({
+    type: 'assistant',
+    message: { role: 'assistant', content: [{ type: 'text', text }] },
+  });
+}
+
+function userLine(text: string): string {
+  return JSON.stringify({
+    type: 'user',
+    message: { role: 'user', content: [{ type: 'text', text }] },
+  });
+}
+
+function toolResultLine(): string {
+  return JSON.stringify({
+    type: 'user',
+    message: {
+      role: 'user',
+      content: [{ type: 'tool_result', tool_use_id: 'x', content: 'ok' }],
+    },
+  });
+}
+
+function systemLine(): string {
+  return JSON.stringify({ type: 'system', subtype: 'init' });
+}
+
+// ---------- 纯函数 ----------
+
+test('parseClaudeLine: 非法 JSON 返回 null', () => {
+  assert.equal(parseClaudeLine('not-json'), null);
+  assert.equal(parseClaudeLine(''), null);
+});
+
+test('parseClaudeLine: 合法 JSON 返回对象', () => {
+  const entry = parseClaudeLine(assistantLine('hi'));
+  assert.equal(entry?.type, 'assistant');
+});
+
+test('isClaudeQuestion: 以问号结尾为提问', () => {
+  assert.equal(isClaudeQuestion('May I proceed?'), true);
+  assert.equal(isClaudeQuestion('要继续吗？'), true);
+});
+
+test('isClaudeQuestion: 普通陈述不是提问', () => {
+  assert.equal(isClaudeQuestion('Done fixing the bug'), false);
+});
+
+test('classifyClaudeAppend: assistant 正常输出 -> activity', () => {
+  assert.equal(classifyClaudeAppend([assistantLine('Here is the fix')]), 'activity');
+});
+
+test('classifyClaudeAppend: assistant 提问 -> waiting', () => {
+  assert.equal(classifyClaudeAppend([assistantLine('Should I run the tests now?')]), 'waiting');
+});
+
+test('classifyClaudeAppend: user 真实输入 -> activity', () => {
+  assert.equal(classifyClaudeAppend([userLine('fix the bug please')]), 'activity');
+});
+
+test('classifyClaudeAppend: 仅 tool_result -> none（自动回填）', () => {
+  assert.equal(classifyClaudeAppend([toolResultLine()]), 'none');
+});
+
+test('classifyClaudeAppend: 仅 system 行 -> none', () => {
+  assert.equal(classifyClaudeAppend([systemLine()]), 'none');
+});
+
+test('classifyClaudeAppend: 取最后一条信号', () => {
+  // user 输入后跟 assistant 提问，最新为 waiting
+  const lines = [userLine('run it'), assistantLine('Shall I continue?')];
+  assert.equal(classifyClaudeAppend(lines), 'waiting');
+});
+
+// ---------- 探针集成 ----------
+
+function tmpProjectsDir(): string {
+  return fs.mkdtempSync(path.join(os.tmpdir(), 'aiw-claude-'));
+}
+
+function writeSession(dir: string, name: string, content: string): string {
+  const file = path.join(dir, name + '.jsonl');
+  fs.appendFileSync(file, content);
+  return file;
+}
+
+test('ClaudeSessionProbe: 新会话 add -> activity，静默超时 -> done', async () => {
+  const dir = tmpProjectsDir();
+  const probe = new ClaudeSessionProbe(dir, 0.2);
+  const events: Array<{ type: string; message?: string }> = [];
+  probe.onEvent((e) => events.push(e));
+  probe.start();
+
+  // 等 chokidar 初始扫描完成，避免 add 被 ignoreInitial 吞掉
+  await new Promise((r) => setTimeout(r, 50));
+
+  // 新会话文件创建（add）
+  writeSession(dir, 's1', assistantLine('Starting work') + '\n');
+  await new Promise((r) => setTimeout(r, 80));
+  assert.equal(probe.isActive(), true);
+
+  // 静默超时 -> done
+  await new Promise((r) => setTimeout(r, 400));
+  assert.equal(probe.isActive(), false);
+  assert.equal(events.some((e) => e.type === 'activity'), true);
+  assert.equal(events.some((e) => e.type === 'done'), true);
+
+  probe.stop();
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('ClaudeSessionProbe: 追加 assistant 提问 -> waiting', async () => {
+  const dir = tmpProjectsDir();
+  const probe = new ClaudeSessionProbe(dir, 1);
+  const events: Array<{ type: string; message?: string }> = [];
+  probe.onEvent((e) => events.push(e));
+  probe.start();
+
+  await new Promise((r) => setTimeout(r, 50));
+
+  const file = writeSession(dir, 's2', assistantLine('Working...') + '\n');
+  await new Promise((r) => setTimeout(r, 80));
+  assert.equal(probe.isActive(), true);
+
+  // 追加提问行
+  fs.appendFileSync(file, assistantLine('Should I proceed?') + '\n');
+  await new Promise((r) => setTimeout(r, 100));
+
+  assert.equal(probe.isActive(), false);
+  assert.equal(events.some((e) => e.type === 'waiting'), true);
+
+  probe.stop();
+  fs.rmSync(dir, { recursive: true, force: true });
+});

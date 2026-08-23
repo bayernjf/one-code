@@ -26,6 +26,12 @@ export interface ShellHookConfig {
   tools: string[];
 }
 
+/** Claude Desktop/Code 会话探针配置 */
+export interface ClaudeConfig {
+  /** 会话 jsonl 所在目录（~/.claude/projects） */
+  projectsDir: string;
+}
+
 export interface DesktopConfig {
   targets: WatchTarget[];
   /** 灵敏度（与扩展侧语义一致） */
@@ -34,6 +40,8 @@ export interface DesktopConfig {
   silenceTimeout: number;
   /** Shell Hook 精确终端信号 */
   shellHook: ShellHookConfig;
+  /** Claude 会话 jsonl 探针 */
+  claude: ClaudeConfig;
 }
 
 /** 默认精确捕获的终端 AI CLI 命令名（与 zsh 片段保持一致） */
@@ -99,4 +107,9 @@ export function getDefaultConfig(): DesktopConfig {
 /** 默认 Shell Hook 状态文件路径 */
 export function shellHookStateFile(homedir = os.homedir()): string {
   return path.join(homedir, '.ai-watchdog', 'terminal.json');
+}
+
+/** 默认 Claude 会话 jsonl 目录（~/.claude/projects） */
+export function claudeProjectsDir(homedir = os.homedir()): string {
+  return path.join(homedir, '.claude', 'projects');
 }

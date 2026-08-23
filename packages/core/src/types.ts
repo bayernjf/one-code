@@ -18,6 +18,8 @@ export enum MonitorSource {
   Cline = 'cline',
   /** zsh Shell Hook（precmd/preexec 写状态文件），精确终端信号 */
   ShellHook = 'shell-hook',
+  /** Claude Desktop/Code 会话 jsonl（~/.claude/projects/*.jsonl 追加检测） */
+  Claude = 'claude',
 }
 
 /** 活动事件 */

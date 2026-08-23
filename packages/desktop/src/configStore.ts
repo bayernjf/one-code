@@ -31,6 +31,10 @@ export class ConfigStore {
           ...defaults.shellHook,
           ...(parsed.shellHook ?? {}),
         },
+        claude: {
+          ...defaults.claude,
+          ...(parsed.claude ?? {}),
+        },
       };
     } catch {
       return getDefaultConfig();
