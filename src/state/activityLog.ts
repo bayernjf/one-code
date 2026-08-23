@@ -167,5 +167,9 @@ export function getSourceName(source: MonitorSource): string {
       return 'Copilot';
     case MonitorSource.Cline:
       return 'Cline/Roo';
+    case MonitorSource.ShellHook:
+      return 'Shell Hook';
+    case MonitorSource.Claude:
+      return 'Claude';
   }
 }
