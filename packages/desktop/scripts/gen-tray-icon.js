@@ -170,7 +170,7 @@ fs.mkdirSync(outDir, { recursive: true });
 
 for (const size of [16, 32]) {
   const png = encodePNG(size, render(size));
-  const file = path.join(outDir, size === 16 ? 'trayTemplate.png' : 'trayTemplate@2x.png');
+  const file = path.join(outDir, size === 16 ? 'tray.png' : 'tray@2x.png');
   fs.writeFileSync(file, png);
   console.log(`generated ${file} (${png.length} bytes)`);
 }
