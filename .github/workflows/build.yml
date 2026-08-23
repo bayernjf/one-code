@@ -1,0 +1,86 @@
+name: Build Desktop Installers
+
+# 手动触发或 push 到 main/dev 时，在 macOS 与 Windows runner 上
+# 打包 AI Watchdog 桌面应用的安装包（dmg/zip + NSIS exe），
+# 并把产物作为 artifact 上传。
+#
+# 使用方式：
+#   GitHub → Actions → Build Desktop Installers → Run workflow
+#   完成后在 Summary 页下载 aiwatchdog-mac-installer / aiwatchdog-win-installer artifact。
+#
+# 说明：
+#   - afterPack 钩子对 .app 做 ad-hoc 签名，使未配置 Apple 证书时
+#     产物也能通过 Gatekeeper 本机运行。
+#   - CSC_IDENTITY_AUTO_DISCOVERY=false 关闭 Windows 证书自动发现，
+#     避免无证书环境下构建失败。
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - dev
+    paths:
+      - "packages/desktop/**"
+      - "packages/core/**"
+      - ".github/workflows/build.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: build (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            script: dist:mac
+            artifact_name: aiwatchdog-mac-installer
+            artifact_glob: |
+              packages/desktop/release/*.dmg
+              packages/desktop/release/*.zip
+              packages/desktop/release/*.blockmap
+          - os: windows-latest
+            script: dist:win
+            artifact_name: aiwatchdog-win-installer
+            artifact_glob: |
+              packages/desktop/release/*.exe
+              packages/desktop/release/*.blockmap
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build core
+        run: npm run build --workspace @ai-watchdog/core
+
+      - name: Package installer
+        run: npm run ${{ matrix.script }} --workspace @ai-watchdog/desktop
+
+      - name: List build output
+        run: node -e "const fs=require('fs'); const d='packages/desktop/release'; if(fs.existsSync(d)){console.log('=== release directory ==='); console.log(fs.readdirSync(d).join('\n'));} else {console.log('no release dir');}"
+
+      - name: Upload installer artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error
+          retention-days: 30

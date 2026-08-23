@@ -2,23 +2,86 @@
   "name": "@ai-watchdog/desktop",
   "version": "0.1.0",
   "description": "AI Watchdog desktop app: cross-product monitoring daemon (Electron tray)",
+  "author": "AI Watchdog",
   "main": "dist/main.js",
   "scripts": {
     "build": "tsc -p tsconfig.json && tsc -p tsconfig.renderer.json && cp src/renderer/settings.html dist/renderer/settings.html",
     "start": "npm run build && electron .",
     "dev": "tsc -p tsconfig.json && electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
-    "gen:tray-icon": "node scripts/gen-tray-icon.js"
+    "test": "node ../../scripts/test-runner.mjs test",
+    "gen:tray-icon": "node scripts/gen-tray-icon.js",
+    "gen:app-icon": "node scripts/gen-app-icon.js",
+    "postinstall": "node scripts/sign-dev-electron.cjs",
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac --publish never",
+    "dist:win": "npm run build && cross-env CSC_IDENTITY_AUTO_DISCOVERY=false electron-builder --win --publish never"
   },
   "dependencies": {
     "@ai-watchdog/core": "0.1.0",
     "chokidar": "^3.6.0",
+    "electron-updater": "^6.3.0",
     "node-notifier": "^10.0.1"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/node-notifier": "^8.0.5",
-    "electron": "^31.0.0",
+    "cross-env": "^7.0.3",
+    "electron": "31.7.7",
+    "electron-builder": "^24.13.3",
+    "tsx": "^4.19.0",
     "typescript": "^5.3.0"
+  },
+  "build": {
+    "appId": "com.aiwatchdog.app",
+    "productName": "AI Watchdog",
+    "npmRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "dist/**/*",
+      "resources/tray/**/*",
+      "!dist/**/*.map"
+    ],
+    "afterPack": "./scripts/ad-hoc-sign.cjs",
+    "mac": {
+      "icon": "resources/icon.png",
+      "identity": null,
+      "target": [
+        "dmg",
+        "zip"
+      ],
+      "category": "public.app-category.utilities",
+      "artifactName": "${productName}-${version}-${arch}-mac.${ext}",
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "win": {
+      "icon": "resources/icon.png",
+      "executableName": "AIWatchdog",
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "${productName}-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "perMachine": false,
+      "shortcutName": "AI Watchdog"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "bayernjf",
+        "repo": "one-code"
+      }
+    ]
   }
 }

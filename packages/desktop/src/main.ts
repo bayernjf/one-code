@@ -5,6 +5,7 @@ import { DesktopConfig } from './config';
 import { ConfigStore } from './configStore';
 import { discoverWorkspaces } from './workspaceDiscovery';
 import { SettingsWindow } from './settingsWindow';
+import { initAutoUpdater } from './updater';
 import { FileProbe } from './probes/fileProbe';
 import { ProcessProbe } from './probes/processProbe';
 import { Probe } from './probes/probe';
@@ -66,18 +67,24 @@ function restartProbes(config: DesktopConfig): void {
   probes.forEach((p) => p.stop());
   probes = buildProbes(config);
   for (const probe of probes) {
-    probe.onEvent((event) => aggregator.handleEvent(event));
+    probe.onEvent((event) => {
+      console.log(`[probe] ${event.source} -> ${event.type}`, event.message ?? '');
+      aggregator.handleEvent(event);
+    });
     probe.start();
+    console.log(`[probe] started: ${probe.source}`);
   }
 }
 
 function showNotification(payload: { type: 'done' | 'waiting'; source: MonitorSource }): void {
   const title = payload.type === 'done' ? 'AI 已完成任务' : 'AI 等待你的输入';
   const body = payload.type === 'done' ? 'AI 活动已停止，可以回来接管了' : 'AI 需要你确认或输入';
+  console.log(`[notify] ${payload.type} (source: ${payload.source})`);
   new Notification({ title, body, silent: false }).show();
 }
 
 function updateTray(status: AIStatus): void {
+  console.log(`[status] -> ${status}`);
   if (!tray) {
     return;
   }
@@ -129,8 +136,8 @@ function rebuildTrayMenu(config: DesktopConfig): void {
 }
 
 function createTray(config: DesktopConfig): void {
-  // 加载托盘图标（彩色产品 logo，不设模板图以保留品牌色）
-  const iconPath = path.join(__dirname, '..', 'resources', 'tray', 'trayTemplate.png');
+  // 加载托盘图标（彩色产品 logo；文件名不带 Template 后缀，避免 macOS 强制单色模板图）
+  const iconPath = path.join(__dirname, '..', 'resources', 'tray', 'tray.png');
   let image = nativeImage.createFromPath(iconPath);
   if (image.isEmpty()) {
     image = nativeImage.createEmpty();
@@ -141,6 +148,8 @@ function createTray(config: DesktopConfig): void {
 }
 
 app.whenReady().then(() => {
+  initAutoUpdater();
+
   configStore = new ConfigStore();
   const config = configStore.load();
   fillWatchDirs(config);
