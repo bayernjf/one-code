@@ -27,6 +27,10 @@ export class ConfigStore {
         windowSize: parsed.windowSize ?? defaults.windowSize,
         activityThreshold: parsed.activityThreshold ?? defaults.activityThreshold,
         silenceTimeout: parsed.silenceTimeout ?? defaults.silenceTimeout,
+        shellHook: {
+          ...defaults.shellHook,
+          ...(parsed.shellHook ?? {}),
+        },
       };
     } catch {
       return getDefaultConfig();

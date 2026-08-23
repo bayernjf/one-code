@@ -16,6 +16,8 @@ export enum MonitorSource {
   Terminal = 'terminal',
   Copilot = 'copilot',
   Cline = 'cline',
+  /** zsh Shell Hook（precmd/preexec 写状态文件），精确终端信号 */
+  ShellHook = 'shell-hook',
 }
 
 /** 活动事件 */
