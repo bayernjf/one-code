@@ -5,6 +5,7 @@ import { DesktopConfig } from './config';
 import { ConfigStore } from './configStore';
 import { discoverWorkspaces } from './workspaceDiscovery';
 import { SettingsWindow } from './settingsWindow';
+import { initAutoUpdater } from './updater';
 import { FileProbe } from './probes/fileProbe';
 import { ProcessProbe } from './probes/processProbe';
 import { Probe } from './probes/probe';
@@ -141,6 +142,8 @@ function createTray(config: DesktopConfig): void {
 }
 
 app.whenReady().then(() => {
+  initAutoUpdater();
+
   configStore = new ConfigStore();
   const config = configStore.load();
   fillWatchDirs(config);

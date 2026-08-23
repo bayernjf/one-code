@@ -1,0 +1,235 @@
+name: Release
+
+# Release Workflow（对齐 soft-desk 的发布机制）
+#
+# 三种触发方式：
+#   1. 推送 v* tag → 正式发布（使用指定版本号，prerelease: false，生成 release notes）
+#   2. push 到 main 分支 → 正式发布（自动递增 patch 版本，bump packages/desktop/package.json
+#      并 commit；构建产物内嵌新版本号；构建成功后才打 tag + 发 Release，失败则不留 tag）
+#   3. push 到 dev 分支 → Dev Snapshot（prerelease: true，tag 为 snapshot，每次覆盖）
+#
+# 两端并行构建，都成功后才创建 / 更新 Release，避免"半个版本"。
+# electron-updater 会读取 latest*.yml 完成自动更新分发。
+#
+# 使用方式（手动正式发版）：
+#   npm version minor --workspace @ai-watchdog/desktop
+#   git push --follow-tags
+#
+# 使用方式（自动正式发版）：
+#   push / merge 到 main 分支自动触发，版本号自动 +0.0.1
+#
+# 使用方式（Dev Snapshot）：
+#   push 到 dev 分支自动触发，无需手动操作。
+#
+# 注意（monorepo 适配）：
+#   - 版本号在 packages/desktop/package.json（不是根 package.json）
+#   - 构建产物在 packages/desktop/release/
+
+on:
+  push:
+    tags:
+      - "v*"
+    branches:
+      - main
+      - dev
+    paths:
+      - "package.json"
+      - "package-lock.json"
+      - "packages/desktop/**"
+      - "packages/core/**"
+      - ".github/workflows/release.yml"
+
+permissions:
+  contents: write
+
+jobs:
+  resolve-version:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      is_tag: ${{ steps.resolve.outputs.is_tag }}
+      is_main: ${{ steps.resolve.outputs.is_main }}
+      is_dev: ${{ steps.resolve.outputs.is_dev }}
+      tag_name: ${{ steps.resolve.outputs.tag_name }}
+      release_name: ${{ steps.resolve.outputs.release_name }}
+      is_prerelease: ${{ steps.resolve.outputs.is_prerelease }}
+      generate_notes: ${{ steps.resolve.outputs.generate_notes }}
+      commit_sha: ${{ steps.resolve.outputs.commit_sha }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Resolve release tag and mode
+        id: resolve
+        run: |
+          set -e
+
+          IS_TAG=false
+          IS_MAIN=false
+          IS_DEV=false
+          TAG_NAME=""
+          RELEASE_NAME=""
+          IS_PRERELEASE=true
+          GENERATE_NOTES=false
+          COMMIT_SHA="${{ github.sha }}"
+
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            IS_TAG=true
+            TAG_NAME="${{ github.ref_name }}"
+            RELEASE_NAME="${{ github.ref_name }}"
+            IS_PRERELEASE=false
+            GENERATE_NOTES=true
+          elif [[ "${{ github.ref }}" == refs/heads/main ]]; then
+            IS_MAIN=true
+            LATEST_TAG=$(git tag -l 'v*.*.*' --sort=-v:refname | head -n 1 || true)
+            if [[ -z "$LATEST_TAG" ]]; then
+              LATEST_TAG="v0.0.0"
+            fi
+            VERSION=${LATEST_TAG#v}
+            IFS='.' read -r MAJOR MINOR PATCH <<< "$VERSION"
+            PATCH=$((PATCH + 1))
+            NEW_VERSION="${MAJOR}.${MINOR}.${PATCH}"
+            TAG_NAME="v${NEW_VERSION}"
+            RELEASE_NAME="${TAG_NAME}"
+            IS_PRERELEASE=false
+            GENERATE_NOTES=true
+
+            # monorepo：bump 子包版本，不提交（在 build 成功后的 publish 阶段再打 tag）
+            npm version "$NEW_VERSION" --workspace @ai-watchdog/desktop --no-git-tag-version
+
+            git config user.name "github-actions[bot]"
+            git config user.email "github-actions[bot]@users.noreply.github.com"
+            git add packages/desktop/package.json
+            git commit -m "chore(release): bump version to ${NEW_VERSION} [skip ci]"
+            git push origin HEAD:main
+            COMMIT_SHA=$(git rev-parse HEAD)
+          elif [[ "${{ github.ref }}" == refs/heads/dev ]]; then
+            IS_DEV=true
+            TAG_NAME="snapshot"
+            RELEASE_NAME="Dev Snapshot"
+            IS_PRERELEASE=true
+            GENERATE_NOTES=false
+
+            npm version 0.0.0-dev --workspace @ai-watchdog/desktop --no-git-tag-version --allow-same-version
+          fi
+
+          echo "is_tag=$IS_TAG" >> $GITHUB_OUTPUT
+          echo "is_main=$IS_MAIN" >> $GITHUB_OUTPUT
+          echo "is_dev=$IS_DEV" >> $GITHUB_OUTPUT
+          echo "tag_name=$TAG_NAME" >> $GITHUB_OUTPUT
+          echo "release_name=$RELEASE_NAME" >> $GITHUB_OUTPUT
+          echo "is_prerelease=$IS_PRERELEASE" >> $GITHUB_OUTPUT
+          echo "generate_notes=$GENERATE_NOTES" >> $GITHUB_OUTPUT
+          echo "commit_sha=$COMMIT_SHA" >> $GITHUB_OUTPUT
+
+  build:
+    name: build (${{ matrix.os }})
+    needs: resolve-version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            script: dist:mac
+            artifact_glob: |
+              packages/desktop/release/*.dmg
+              packages/desktop/release/*.zip
+              packages/desktop/release/*.blockmap
+              packages/desktop/release/latest-mac.yml
+          - os: windows-latest
+            script: dist:win
+            artifact_glob: |
+              packages/desktop/release/*.exe
+              packages/desktop/release/*.blockmap
+              packages/desktop/release/latest.yml
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-version.outputs.commit_sha }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify (typecheck + tests)
+        run: |
+          npm run typecheck --workspace @ai-watchdog/desktop
+          npm test --workspace @ai-watchdog/desktop
+
+      - name: Package installer
+        run: npm run ${{ matrix.script }} --workspace @ai-watchdog/desktop
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ matrix.os }}
+          path: ${{ matrix.artifact_glob }}
+          if-no-files-found: error
+          retention-days: 30
+
+  publish:
+    name: Publish GitHub Release
+    needs: [resolve-version, build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.resolve-version.outputs.commit_sha }}
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create and push tag (main branch only)
+        if: needs.resolve-version.outputs.is_main == 'true'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "${{ needs.resolve-version.outputs.tag_name }}"
+          git push origin "${{ needs.resolve-version.outputs.tag_name }}"
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release
+
+      - name: Flatten artifact tree
+        run: |
+          set -e
+          mkdir -p release-flat
+          find release -type f -exec cp -v {} release-flat/ \;
+          ls -la release-flat
+
+      - name: Delete existing snapshot release (dev branch only)
+        if: needs.resolve-version.outputs.is_dev == 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete snapshot --yes --cleanup-tag 2>/dev/null || true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.resolve-version.outputs.tag_name }}
+          name: ${{ needs.resolve-version.outputs.release_name }}
+          draft: false
+          prerelease: ${{ needs.resolve-version.outputs.is_prerelease }}
+          generate_release_notes: ${{ needs.resolve-version.outputs.generate_notes }}
+          files: release-flat/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
