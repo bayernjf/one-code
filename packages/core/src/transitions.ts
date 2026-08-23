@@ -1,4 +1,4 @@
-import { AIStatus } from '../monitors/types';
+import { AIStatus } from './types';
 
 export type MonitorEventType = 'activity' | 'done' | 'waiting' | 'idle';
 

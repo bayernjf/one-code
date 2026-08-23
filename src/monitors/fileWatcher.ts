@@ -1,8 +1,7 @@
 import * as vscode from 'vscode';
 import { IMonitor, MonitorEvent, MonitorSource } from './types';
 import { getConfig } from '../config';
-import { RapidEditDetector } from './editWindow';
-import { shouldIgnorePath } from '../util/paths';
+import { RapidEditDetector, shouldIgnorePath } from '@ai-watchdog/core';
 
 /**
  * 文件系统监控器 - 通用 AI 活动检测核心

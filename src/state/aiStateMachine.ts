@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { AIStatus, MonitorEvent, MonitorSource, StatusChangeEvent } from '../monitors/types';
-import { computeNextStatus } from './transitions';
+import { computeNextStatus } from '@ai-watchdog/core';
 
 /**
  * AI 状态机

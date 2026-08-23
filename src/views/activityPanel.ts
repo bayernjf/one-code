@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { ActivityLog, formatTime, getStatusIcon, getSourceName } from '../state/activityLog';
-import { formatDuration } from '../util/format';
+import { formatDuration } from '@ai-watchdog/core';
 import { ActivityEvent, AIStatus } from '../monitors/types';
 
 /**
