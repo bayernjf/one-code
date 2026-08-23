@@ -68,6 +68,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build core
+        run: npm run build --workspace @ai-watchdog/core
+
       - name: Package installer
         run: npm run ${{ matrix.script }} --workspace @ai-watchdog/desktop
 

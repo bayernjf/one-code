@@ -165,6 +165,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Build core
+        run: npm run build --workspace @ai-watchdog/core
+
       - name: Verify (typecheck + tests)
         run: |
           npm run typecheck --workspace @ai-watchdog/desktop

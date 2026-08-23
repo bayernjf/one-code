@@ -9,7 +9,7 @@
     "start": "npm run build && electron .",
     "dev": "tsc -p tsconfig.json && electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",
-    "test": "node --import tsx --test test/*.test.ts",
+    "test": "node ../../scripts/test-runner.mjs test",
     "gen:tray-icon": "node scripts/gen-tray-icon.js",
     "gen:app-icon": "node scripts/gen-app-icon.js",
     "postinstall": "node scripts/sign-dev-electron.cjs",
