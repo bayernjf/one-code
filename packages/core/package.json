@@ -2,9 +2,13 @@
   "name": "@ai-watchdog/core",
   "version": "0.1.0",
   "description": "AI Watchdog core: pure logic and shared types, host-agnostic (no vscode dependency)",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
+    "build": "tsc -p tsconfig.json",
     "test": "node --import tsx --test test/*.test.ts",
     "typecheck": "tsc --noEmit"
   },
