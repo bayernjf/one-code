@@ -7,7 +7,7 @@ import { CopilotWatcherMonitor } from './monitors/copilotWatcher';
 import { ClineWatcherMonitor } from './monitors/clineWatcher';
 import { AIStateMachine } from './state/aiStateMachine';
 import { ActivityLog } from './state/activityLog';
-import { formatDuration } from './util/format';
+import { formatDuration } from '@ai-watchdog/core';
 import { StatusBarIndicator } from './notifications/statusBar';
 import { Notifier } from './notifications/notifier';
 import { SoundPlayer } from './notifications/soundPlayer';

@@ -1,10 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { RapidEditDetector } from '../monitors/editWindow';
-import { shouldIgnorePath } from '../util/paths';
-import { computeNextStatus } from '../state/transitions';
-import { formatDuration } from '../util/format';
-import { AIStatus } from '../monitors/types';
+import { RapidEditDetector, shouldIgnorePath, computeNextStatus, formatDuration, AIStatus } from '../src';
 
 test('RapidEditDetector: 窗口内达到阈值判定为工作中', () => {
   const detector = new RapidEditDetector(3000, 3);

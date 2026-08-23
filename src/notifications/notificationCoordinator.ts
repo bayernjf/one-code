@@ -2,7 +2,7 @@ import { MonitorSource } from '../monitors/types';
 import { Notifier } from './notifier';
 import { SoundPlayer } from './soundPlayer';
 import { DesktopNotifier } from './desktopNotify';
-import { formatDuration } from '../util/format';
+import { formatDuration } from '@ai-watchdog/core';
 import { getSourceName } from '../state/activityLog';
 
 /**
