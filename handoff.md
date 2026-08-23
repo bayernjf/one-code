@@ -38,6 +38,27 @@ VS Code 插件，监控 AI 编码工具（Copilot Chat、Cline/Roo Code、终端
 │       │   ├── paths.ts      # shouldIgnorePath 路径过滤
 │       │   └── editWindow.ts # RapidEditDetector 滑动窗口检测
 │       └── test/core.test.ts # 10 条单测
+├── packages/
+│   └── desktop/              # @ai-watchdog/desktop：Electron 桌面应用（统一监控产品）
+│       ├── package.json
+│       ├── tsconfig.json
+│       └── src/
+│           ├── main.ts       # 入口：托盘 + 通知 + 探针装配
+│           ├── config.ts     # 监控目标配置（WatchTarget）
+│           ├── configStore.ts # 配置持久化（JSON 存 userData）
+│           ├── workspaceDiscovery.ts # 工作区目录自动发现
+│           ├── aggregator.ts # 状态聚合引擎（复用 core 状态机 + 防抖）
+│           ├── settingsWindow.ts # 设置窗口（BrowserWindow + IPC）
+│           ├── preload.ts    # contextBridge 暴露 settingsAPI
+│           ├── renderer/
+│           │   ├── settings.html # 设置页 UI（勾选目标 + 灵敏度）
+│           │   └── settings.ts   # 渲染进程逻辑（ESM）
+│           ├── scripts/gen-tray-icon.js # 托盘图标生成脚本（纯 Node，无依赖）
+│           ├── resources/tray/ # 托盘图标 PNG（16/32 @2x，产品 logo）
+│           └── probes/
+│               ├── probe.ts      # 探针接口（宿主无关）
+│               ├── fileProbe.ts  # 文件探针（chokidar + RapidEditDetector）
+│               └── processProbe.ts # 进程探针（ps 轮询，弱信号）
 └── src/                      # VS Code 扩展（依赖 @ai-watchdog/core）
     ├── extension.ts          # 入口：初始化所有模块、注册命令、连接事件
     ├── config.ts             # 读取 aiWatchdog.* 配置项
@@ -97,13 +118,14 @@ waiting → idle（用户确认）
 - [x] 单元测试：`npm run test:unit`（node:test + tsx），覆盖状态机/滑动窗口/文件过滤/时长格式化
 - [x] 纯逻辑解耦：提取 `monitors/editWindow.ts`、`util/paths.ts`、`state/transitions.ts`、`util/format.ts`（不依赖 vscode，可单测）
 - [x] core 包抽取（阶段 1a）：`packages/core`（`@ai-watchdog/core`），纯逻辑 + 类型迁入；npm workspaces 打通扩展侧引用；单测迁至 `packages/core/test`
+- [x] 桌面应用骨架（阶段 1b 初版）：`packages/desktop`（`@ai-watchdog/desktop`），Electron 主进程 + 托盘 + 聚合引擎 + 文件探针（chokidar + RapidEditDetector）+ 进程探针（ps 轮询）；可编译运行
 
 ## 待完成
 
 ### 统一监控产品（下一阶段，见 `design.md`）
 
 - [x] 阶段 1a：core 抽取（纯逻辑解耦为 `@ai-watchdog/core`）
-- [ ] 阶段 1b：Electron 壳 + 托盘 + 设置页；文件探针 + 进程探针
+- [✅] 阶段 1b：Electron 壳 + 托盘 + 设置窗口 + 文件探针 + 进程探针（骨架、目录自动发现、配置持久化、托盘图标、设置窗口 UI 均已完成；待端到端联调）
 - [ ] 阶段 2：Shell Hook（zsh）精确终端监控
 - [ ] 阶段 3：Claude Desktop 专用探针（`~/.claude/projects/*.jsonl`）
 - [ ] 阶段 4（可选）：VS Code 扩展改造为"深度模式伴侣"；ChatGPT 浏览器扩展
@@ -138,6 +160,8 @@ npm run test:unit                     # 扩展侧单测（node:test + tsx）
 npm test --workspace @ai-watchdog/core # core 包单测
 npm run typecheck --workspace @ai-watchdog/core # core 包类型检查
 npx tsc --noEmit                      # 扩展侧类型检查
+npm run build --workspace @ai-watchdog/desktop # 桌面应用构建（tsc → dist/）
+npm run start --workspace @ai-watchdog/desktop # 启动桌面应用（托盘）
 # F5                                  # 在 VS Code 中启动扩展开发宿主调试
 ```
 
