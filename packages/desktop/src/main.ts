@@ -1,4 +1,5 @@
 import { app, Tray, Menu, nativeImage, Notification } from 'electron';
+import os from 'node:os';
 import path from 'node:path';
 import { AIStatus, MonitorSource } from '@ai-watchdog/core';
 import { DesktopConfig } from './config';
@@ -8,14 +9,18 @@ import { SettingsWindow } from './settingsWindow';
 import { startAutoUpdater, stopAutoUpdater } from './updater';
 import { FileProbe } from './probes/fileProbe';
 import { ProcessProbe } from './probes/processProbe';
+import { ShellHookProbe } from './probes/shellHookProbe';
+import { ClaudeSessionProbe } from './probes/claudeSessionProbe';
 import { Probe } from './probes/probe';
 import { Aggregator } from './aggregator';
+import { ShellHookManager, zshrcPath } from './shellHook/manager';
 
 let tray: Tray | undefined;
 const aggregator = new Aggregator();
 let configStore: ConfigStore;
 let settingsWindow: SettingsWindow;
 let probes: Probe[] = [];
+let shellHookManager = new ShellHookManager();
 
 /** 为未显式配置监听目录的目标，自动填充最近活跃的工作区 */
 function fillWatchDirs(config: DesktopConfig): void {
@@ -57,6 +62,18 @@ function buildProbes(config: DesktopConfig): Probe[] {
 
   if (processPatterns.size > 0) {
     probes.push(new ProcessProbe(Array.from(processPatterns)));
+  }
+
+  if (config.shellHook.enabled) {
+    probes.push(new ShellHookProbe(config.shellHook.stateFile));
+    console.log(`[shell-hook] watching state file: ${config.shellHook.stateFile}`);
+  }
+
+  // Claude 会话 jsonl 探针：跟随「Claude」监控目标勾选状态
+  const claudeTarget = config.targets.find((t) => t.id === 'claude');
+  if (claudeTarget?.enabled) {
+    probes.push(new ClaudeSessionProbe(config.claude.projectsDir, config.silenceTimeout));
+    console.log(`[claude] watching sessions dir: ${config.claude.projectsDir}`);
   }
 
   return probes;
@@ -102,6 +119,8 @@ function rebuildTrayMenu(config: DesktopConfig): void {
   if (!tray) {
     return;
   }
+  const rcPath = zshrcPath(os.homedir());
+  const shellHookInstalled = shellHookManager.installed(rcPath);
   const menu = Menu.buildFromTemplate([
     {
       label: '监控目标',
@@ -116,6 +135,26 @@ function rebuildTrayMenu(config: DesktopConfig): void {
           rebuildTrayMenu(config);
         },
       })),
+    },
+    { type: 'separator' },
+    {
+      label: '终端 Shell Hook',
+      type: 'submenu',
+      submenu: [
+        {
+          label: shellHookInstalled
+            ? '卸载终端 zsh Hook（移除 ~/.zshrc 片段）'
+            : '安装终端 zsh Hook（写入 ~/.zshrc）',
+          click: () => {
+            if (shellHookManager.installed(rcPath)) {
+              shellHookManager.uninstall(rcPath);
+            } else {
+              shellHookManager.install(rcPath);
+            }
+            rebuildTrayMenu(config);
+          },
+        },
+      ],
     },
     { type: 'separator' },
     {
