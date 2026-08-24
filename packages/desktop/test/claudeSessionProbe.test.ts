@@ -97,29 +97,48 @@ function writeSession(dir: string, name: string, content: string): string {
   return file;
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((r) => setTimeout(r, ms));
+}
+
+/** 轮询等待条件成立，超时抛错（慢速 CI runner 上比固定 sleep 可靠） */
+async function waitFor(cond: () => boolean, timeoutMs: number, label: string): Promise<void> {
+  const start = Date.now();
+  while (!cond()) {
+    if (Date.now() - start > timeoutMs) {
+      assert.fail(`timeout waiting for ${label}`);
+    }
+    await sleep(25);
+  }
+}
+
 test('ClaudeSessionProbe: 新会话 add -> activity，静默超时 -> done', async () => {
   const dir = tmpProjectsDir();
   const probe = new ClaudeSessionProbe(dir, 0.2);
   const events: Array<{ type: string; message?: string }> = [];
   probe.onEvent((e) => events.push(e));
-  probe.start();
 
-  // 等 chokidar 初始扫描完成，避免 add 被 ignoreInitial 吞掉
-  await new Promise((r) => setTimeout(r, 50));
+  // try/finally：断言失败也必须关掉 watcher，否则进程因事件循环挂起不退出
+  try {
+    probe.start();
+    // 等 chokidar 初始扫描完成，避免 add 被 ignoreInitial 吞掉
+    await sleep(200);
 
-  // 新会话文件创建（add）
-  writeSession(dir, 's1', assistantLine('Starting work') + '\n');
-  await new Promise((r) => setTimeout(r, 80));
-  assert.equal(probe.isActive(), true);
+    // 新会话文件创建（add）
+    writeSession(dir, 's1', assistantLine('Starting work') + '\n');
+    await waitFor(() => probe.isActive(), 3000, 'activity after session start');
 
-  // 静默超时 -> done
-  await new Promise((r) => setTimeout(r, 400));
-  assert.equal(probe.isActive(), false);
-  assert.equal(events.some((e) => e.type === 'activity'), true);
-  assert.equal(events.some((e) => e.type === 'done'), true);
-
-  probe.stop();
-  fs.rmSync(dir, { recursive: true, force: true });
+    // 静默超时 -> done
+    await waitFor(
+      () => !probe.isActive() && events.some((e) => e.type === 'done'),
+      3000,
+      'done after silence timeout'
+    );
+    assert.equal(events.some((e) => e.type === 'activity'), true);
+  } finally {
+    probe.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('ClaudeSessionProbe: 追加 assistant 提问 -> waiting', async () => {
@@ -127,21 +146,23 @@ test('ClaudeSessionProbe: 追加 assistant 提问 -> waiting', async () => {
   const probe = new ClaudeSessionProbe(dir, 1);
   const events: Array<{ type: string; message?: string }> = [];
   probe.onEvent((e) => events.push(e));
-  probe.start();
 
-  await new Promise((r) => setTimeout(r, 50));
+  try {
+    probe.start();
+    await sleep(200);
 
-  const file = writeSession(dir, 's2', assistantLine('Working...') + '\n');
-  await new Promise((r) => setTimeout(r, 80));
-  assert.equal(probe.isActive(), true);
+    const file = writeSession(dir, 's2', assistantLine('Working...') + '\n');
+    await waitFor(() => probe.isActive(), 3000, 'activity after session start');
 
-  // 追加提问行
-  fs.appendFileSync(file, assistantLine('Should I proceed?') + '\n');
-  await new Promise((r) => setTimeout(r, 100));
-
-  assert.equal(probe.isActive(), false);
-  assert.equal(events.some((e) => e.type === 'waiting'), true);
-
-  probe.stop();
-  fs.rmSync(dir, { recursive: true, force: true });
+    // 追加提问行
+    fs.appendFileSync(file, assistantLine('Should I proceed?') + '\n');
+    await waitFor(
+      () => !probe.isActive() && events.some((e) => e.type === 'waiting'),
+      3000,
+      'waiting after question'
+    );
+  } finally {
+    probe.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

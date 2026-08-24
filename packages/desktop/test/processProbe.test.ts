@@ -34,15 +34,19 @@ test('ProcessProbe: 从活跃变为不活跃时触发 done', async () => {
   const events: MonitorEvent[] = [];
   probe.onEvent((e) => events.push(e));
 
-  probe.start();
-  await new Promise((r) => setTimeout(r, 50));
-  assert.equal(probe.isActive(), true);
+  // try/finally：断言失败也必须清掉轮询 interval，否则进程挂起不退出
+  try {
+    probe.start();
+    await new Promise((r) => setTimeout(r, 50));
+    assert.equal(probe.isActive(), true);
 
-  // 进程消失
-  stdout = '/usr/bin/finder\n';
-  await new Promise((r) => setTimeout(r, 50));
+    // 进程消失
+    stdout = '/usr/bin/finder\n';
+    await new Promise((r) => setTimeout(r, 50));
+  } finally {
+    probe.stop();
+  }
 
-  probe.stop();
   assert.equal(probe.isActive(), false);
   assert.equal(events.length, 1);
   assert.equal(events[0].type, 'done');

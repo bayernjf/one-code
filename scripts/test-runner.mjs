@@ -37,7 +37,9 @@ if (testFiles.length === 0) {
 const result = spawnSync(
   process.execPath,
   ['--import', 'tsx', '--test', ...testFiles],
-  { stdio: 'inherit' }
+  // 兜底超时：探针测试若因 watcher/interval 未清理而挂起，
+  // 快速失败而不是占满 CI 的 job 超时（30 分钟）后才被取消
+  { stdio: 'inherit', timeout: 5 * 60 * 1000, killSignal: 'SIGKILL' }
 );
 
 process.exit(result.status ?? 1);
