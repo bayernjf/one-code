@@ -20,6 +20,8 @@ export enum MonitorSource {
   ShellHook = 'shell-hook',
   /** Claude Desktop/Code 会话 jsonl（~/.claude/projects/*.jsonl 追加检测） */
   Claude = 'claude',
+  /** VS Code 扩展伴侣经本地 socket 上报的宿主内部深度信号 */
+  VSCodeCompanion = 'vscode-companion',
 }
 
 /** 活动事件 */
