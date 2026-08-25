@@ -211,7 +211,7 @@ npm run dist:win --workspace @ai-watchdog/desktop # 打包 Windows 安装包（N
 - Cline/Roo 的 webview 内容不可直接访问，依赖文件系统变更间接检测
 - 终端 proposed API 需要 `--enable-proposed-api` 启动参数，正式发布版不可用 → 伴侣模式下该深度信号同样受限
 - VS Code 扩展形态本身无法监控非 fork 独立产品（Claude Desktop / ChatGPT），这部分由桌面守护进程覆盖（见 `design.md`）
-- Codex 探针拿不到 waiting：rollout 不落盘「等待用户批准」事件，只能给 working / done / idle
+- Codex 探针拿不到 waiting：rollout 不落盘「等待用户批准」事件，只能给 working / done / idle。2026-08-26 已取证结案（307 个 rollout 里审批事件 0 次，请求走私有 IPC socket），不是待办
 - 完成通知有最短工作时长门槛（默认 30s），短任务只改状态不通知；`waiting` 不受门槛限制
 - Windows 版进程探针用 `tasklist`，但整体未在真实 Windows 上跑过；zsh / fish hook 在 Windows 不提供（只留 bash，需 Git Bash 或 WSL）
 - Codex rollout 格式非官方承诺；事件类型若改名，探针会静默失效（不误报）
