@@ -11,6 +11,7 @@ import { FileProbe } from './probes/fileProbe';
 import { ProcessProbe } from './probes/processProbe';
 import { ShellHookProbe } from './probes/shellHookProbe';
 import { ClaudeSessionProbe } from './probes/claudeSessionProbe';
+import { CodexSessionProbe } from './probes/codexSessionProbe';
 import { Probe } from './probes/probe';
 import { CompanionServer } from './companion/server';
 import { ensureToken } from './companion/token';
@@ -76,6 +77,13 @@ function buildProbes(config: DesktopConfig): Probe[] {
   if (claudeTarget?.enabled) {
     probes.push(new ClaudeSessionProbe(config.claude.projectsDir, config.silenceTimeout));
     console.log(`[claude] watching sessions dir: ${config.claude.projectsDir}`);
+  }
+
+  // Codex 会话探针：跟随「ChatGPT / Codex」监控目标勾选状态
+  const codexTarget = config.targets.find((t) => t.id === 'codex');
+  if (codexTarget?.enabled) {
+    probes.push(new CodexSessionProbe(config.codex.sessionsDir, config.codex.maxTurnMinutes));
+    console.log(`[codex] watching sessions dir: ${config.codex.sessionsDir}`);
   }
 
   if (config.companion.enabled) {
