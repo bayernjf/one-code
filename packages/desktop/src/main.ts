@@ -1,7 +1,7 @@
 import { app, Tray, Menu, nativeImage, Notification } from 'electron';
 import os from 'node:os';
 import path from 'node:path';
-import { AIStatus, MonitorSource } from '@ai-watchdog/core';
+import { AIStatus, MonitorSource, companionTokenPath } from '@ai-watchdog/core';
 import { DesktopConfig } from './config';
 import { ConfigStore } from './configStore';
 import { discoverWorkspaces } from './workspaceDiscovery';
@@ -12,6 +12,8 @@ import { ProcessProbe } from './probes/processProbe';
 import { ShellHookProbe } from './probes/shellHookProbe';
 import { ClaudeSessionProbe } from './probes/claudeSessionProbe';
 import { Probe } from './probes/probe';
+import { CompanionServer } from './companion/server';
+import { ensureToken } from './companion/token';
 import { Aggregator } from './aggregator';
 import { ShellHookManager, zshrcPath } from './shellHook/manager';
 
@@ -74,6 +76,11 @@ function buildProbes(config: DesktopConfig): Probe[] {
   if (claudeTarget?.enabled) {
     probes.push(new ClaudeSessionProbe(config.claude.projectsDir, config.silenceTimeout));
     console.log(`[claude] watching sessions dir: ${config.claude.projectsDir}`);
+  }
+
+  if (config.companion.enabled) {
+    const token = ensureToken(companionTokenPath());
+    probes.push(new CompanionServer(config.companion.socketPath, token));
   }
 
   return probes;

@@ -35,6 +35,10 @@ export class ConfigStore {
           ...defaults.claude,
           ...(parsed.claude ?? {}),
         },
+        companion: {
+          ...defaults.companion,
+          ...(parsed.companion ?? {}),
+        },
       };
     } catch {
       return getDefaultConfig();

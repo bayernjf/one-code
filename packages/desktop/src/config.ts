@@ -5,6 +5,7 @@
  */
 import os from 'node:os';
 import path from 'node:path';
+import { companionSocketPath } from '@ai-watchdog/core';
 export interface WatchTarget {
   id: string;
   name: string;
@@ -32,6 +33,14 @@ export interface ClaudeConfig {
   projectsDir: string;
 }
 
+/** 伴侣深度信号配置（VS Code 扩展经本地 socket 上报） */
+export interface CompanionConfig {
+  /** 是否监听伴侣 socket */
+  enabled: boolean;
+  /** socket 路径（Windows 为命名管道） */
+  socketPath: string;
+}
+
 export interface DesktopConfig {
   targets: WatchTarget[];
   /** 灵敏度（与扩展侧语义一致） */
@@ -42,6 +51,8 @@ export interface DesktopConfig {
   shellHook: ShellHookConfig;
   /** Claude 会话 jsonl 探针 */
   claude: ClaudeConfig;
+  /** 伴侣深度信号 */
+  companion: CompanionConfig;
 }
 
 /** 默认精确捕获的终端 AI CLI 命令名（与 zsh 片段保持一致） */
@@ -100,6 +111,10 @@ export function getDefaultConfig(): DesktopConfig {
     },
     claude: {
       projectsDir: claudeProjectsDir(),
+    },
+    companion: {
+      enabled: true,
+      socketPath: companionSocketPath(),
     },
   };
 }

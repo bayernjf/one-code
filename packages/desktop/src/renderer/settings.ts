@@ -19,6 +19,7 @@ interface DesktopConfig {
   windowSize: number;
   activityThreshold: number;
   silenceTimeout: number;
+  companion: { enabled: boolean; socketPath: string };
 }
 
 interface UpdaterStatus {
@@ -50,6 +51,8 @@ const activityThresholdEl = document.getElementById('activityThreshold') as HTML
 const silenceTimeoutEl = document.getElementById('silenceTimeout') as HTMLInputElement;
 const saveBtn = document.getElementById('save') as HTMLButtonElement;
 const resetBtn = document.getElementById('reset') as HTMLButtonElement;
+const companionEnabledEl = document.getElementById('companionEnabled') as HTMLInputElement;
+const companionSocketEl = document.getElementById('companionSocket')!;
 
 function renderTargets(): void {
   targetsEl.innerHTML = '';
@@ -92,12 +95,18 @@ function renderSensitivity(): void {
   silenceTimeoutEl.value = String(config.silenceTimeout);
 }
 
+function renderCompanion(): void {
+  companionEnabledEl.checked = config.companion.enabled;
+  companionSocketEl.textContent = `socket: ${config.companion.socketPath}`;
+}
+
 function collect(): DesktopConfig {
   return {
     ...config,
     windowSize: Number(windowSizeEl.value),
     activityThreshold: Number(activityThresholdEl.value),
     silenceTimeout: Number(silenceTimeoutEl.value),
+    companion: { ...config.companion, enabled: companionEnabledEl.checked },
   };
 }
 
@@ -114,6 +123,7 @@ resetBtn.addEventListener('click', async () => {
   config = await window.settingsAPI.getConfig();
   renderTargets();
   renderSensitivity();
+  renderCompanion();
 });
 
 // ---- 关于 / 更新 ----
@@ -163,6 +173,7 @@ async function init(): Promise<void> {
   config = await window.settingsAPI.getConfig();
   renderTargets();
   renderSensitivity();
+  renderCompanion();
   renderUpdater();
 }
 
