@@ -33,6 +33,14 @@ export interface ClaudeConfig {
   projectsDir: string;
 }
 
+/** Codex 会话探针配置（覆盖 ChatGPT 桌面端 / VS Code 扩展 / CLI） */
+export interface CodexConfig {
+  /** rollout jsonl 根目录（~/.codex/sessions） */
+  sessionsDir: string;
+  /** turn 超过该时长仍未结束则视为宿主异常退出，清理掉 */
+  maxTurnMinutes: number;
+}
+
 /** 伴侣深度信号配置（VS Code 扩展经本地 socket 上报） */
 export interface CompanionConfig {
   /** 是否监听伴侣 socket */
@@ -51,6 +59,8 @@ export interface DesktopConfig {
   shellHook: ShellHookConfig;
   /** Claude 会话 jsonl 探针 */
   claude: ClaudeConfig;
+  /** Codex 会话 rollout 探针 */
+  codex: CodexConfig;
   /** 伴侣深度信号 */
   companion: CompanionConfig;
 }
@@ -90,6 +100,15 @@ export const DEFAULT_TARGETS: WatchTarget[] = [
     enabled: true,
   },
   {
+    // 进程名不参与判定：ChatGPT.app 常驻后台，进程存在不等于在干活，
+    // 状态完全由 CodexSessionProbe 的 rollout 事件给出
+    id: 'codex',
+    name: 'ChatGPT / Codex',
+    watchDirs: [],
+    processPatterns: [],
+    enabled: true,
+  },
+  {
     id: 'terminal',
     name: 'Terminal',
     watchDirs: [],
@@ -112,6 +131,10 @@ export function getDefaultConfig(): DesktopConfig {
     claude: {
       projectsDir: claudeProjectsDir(),
     },
+    codex: {
+      sessionsDir: codexSessionsDir(),
+      maxTurnMinutes: 30,
+    },
     companion: {
       enabled: true,
       socketPath: companionSocketPath(),
@@ -127,4 +150,9 @@ export function shellHookStateFile(homedir = os.homedir()): string {
 /** 默认 Claude 会话 jsonl 目录（~/.claude/projects） */
 export function claudeProjectsDir(homedir = os.homedir()): string {
   return path.join(homedir, '.claude', 'projects');
+}
+
+/** 默认 Codex 会话 rollout 目录（~/.codex/sessions） */
+export function codexSessionsDir(homedir = os.homedir()): string {
+  return path.join(homedir, '.codex', 'sessions');
 }

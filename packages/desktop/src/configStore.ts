@@ -31,6 +31,10 @@ export class ConfigStore {
           ...defaults.shellHook,
           ...(parsed.shellHook ?? {}),
         },
+        codex: {
+          ...defaults.codex,
+          ...(parsed.codex ?? {}),
+        },
         claude: {
           ...defaults.claude,
           ...(parsed.claude ?? {}),
