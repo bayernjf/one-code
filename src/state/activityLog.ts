@@ -171,5 +171,7 @@ export function getSourceName(source: MonitorSource): string {
       return 'Shell Hook';
     case MonitorSource.Claude:
       return 'Claude';
+    case MonitorSource.VSCodeCompanion:
+      return 'VS Code 伴侣';
   }
 }

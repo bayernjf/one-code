@@ -19,6 +19,11 @@ export interface WatchdogConfig {
     cline: boolean;
     terminal: boolean;
   };
+  companion: {
+    enabled: boolean;
+    /** 空串表示使用 core 默认 socket 路径 */
+    socketPath: string;
+  };
 }
 
 export function getConfig(): WatchdogConfig {
@@ -52,6 +57,10 @@ export function getConfig(): WatchdogConfig {
       copilot: cfg.get<boolean>('monitors.copilot', true),
       cline: cfg.get<boolean>('monitors.cline', true),
       terminal: cfg.get<boolean>('monitors.terminal', true),
+    },
+    companion: {
+      enabled: cfg.get<boolean>('companion.enabled', true),
+      socketPath: cfg.get<string>('companion.socketPath', ''),
     },
   };
 }

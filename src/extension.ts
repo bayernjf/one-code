@@ -8,6 +8,7 @@ import { ClineWatcherMonitor } from './monitors/clineWatcher';
 import { AIStateMachine } from './state/aiStateMachine';
 import { ActivityLog } from './state/activityLog';
 import { formatDuration } from '@ai-watchdog/core';
+import { CompanionClient } from './companion/client';
 import { StatusBarIndicator } from './notifications/statusBar';
 import { Notifier } from './notifications/notifier';
 import { SoundPlayer } from './notifications/soundPlayer';
@@ -24,6 +25,7 @@ let soundPlayer: SoundPlayer;
 let desktopNotifier: DesktopNotifier;
 let notificationCoordinator: NotificationCoordinator;
 let activityPanel: ActivityPanel;
+let companionClient: CompanionClient | undefined;
 let enabled = true;
 let lastChangedFiles: string[] = [];
 
@@ -40,6 +42,12 @@ export function activate(context: vscode.ExtensionContext): void {
   desktopNotifier = new DesktopNotifier();
   notificationCoordinator = new NotificationCoordinator(notifier, soundPlayer, desktopNotifier);
   activityPanel = new ActivityPanel(activityLog);
+
+  // 伴侣模式：向桌面守护进程上报深度信号（守护进程未运行时静默降级）
+  if (config.companion.enabled) {
+    companionClient = new CompanionClient(config.companion.socketPath || undefined);
+    companionClient.connect();
+  }
 
   // 注册侧边栏视图
   const treeView = vscode.window.createTreeView('aiWatchdogActivity', {
@@ -85,6 +93,14 @@ export function activate(context: vscode.ExtensionContext): void {
   // 监听配置变更
   context.subscriptions.push(
     onConfigChange((newConfig) => {
+      if (newConfig.companion.enabled && !companionClient) {
+        companionClient = new CompanionClient(newConfig.companion.socketPath || undefined);
+        companionClient.connect();
+      } else if (!newConfig.companion.enabled && companionClient) {
+        companionClient.dispose();
+        companionClient = undefined;
+      }
+
       if (newConfig.enabled !== enabled) {
         enabled = newConfig.enabled;
         if (enabled) {
@@ -132,6 +148,7 @@ function initMonitors(context: vscode.ExtensionContext): void {
         m.onActivity((event: MonitorEvent) => {
           if (enabled) {
             stateMachine.handleEvent(event);
+            companionClient?.report(event);
             // 记录最近改动的文件，供「一键接管」定位
             if (event.files && event.files.length > 0) {
               lastChangedFiles = event.files;
@@ -282,5 +299,7 @@ function getStatusText(status: AIStatus): string {
 
 export function deactivate(): void {
   stopMonitors();
+  companionClient?.dispose();
+  companionClient = undefined;
   console.log('[AI Watchdog] 插件已停用');
 }
