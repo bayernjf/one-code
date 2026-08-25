@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import chokidar from 'chokidar';
 import { MonitorSource, MonitorEvent } from '@ai-watchdog/core';
 import { Probe } from './probe';
-import { ShellSessionState } from '../shellHook/zsh';
+import { ShellSessionState } from '../shellHook/shared';
 
 /** 状态转移结果：'activity' | 'done'，无变化时为 null */
 export type ShellTransition = 'activity' | 'done' | null;

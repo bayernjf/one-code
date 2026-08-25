@@ -16,7 +16,12 @@ import { Probe } from './probes/probe';
 import { CompanionServer } from './companion/server';
 import { ensureToken } from './companion/token';
 import { Aggregator } from './aggregator';
-import { ShellHookManager, zshrcPath } from './shellHook/manager';
+import {
+  ShellHookManager,
+  SHELL_KINDS,
+  hookSourceFor,
+  rcPathFor,
+} from './shellHook/manager';
 
 let tray: Tray | undefined;
 const aggregator = new Aggregator();
@@ -136,8 +141,6 @@ function rebuildTrayMenu(config: DesktopConfig): void {
   if (!tray) {
     return;
   }
-  const rcPath = zshrcPath(os.homedir());
-  const shellHookInstalled = shellHookManager.installed(rcPath);
   const menu = Menu.buildFromTemplate([
     {
       label: '监控目标',
@@ -157,21 +160,21 @@ function rebuildTrayMenu(config: DesktopConfig): void {
     {
       label: '终端 Shell Hook',
       type: 'submenu',
-      submenu: [
-        {
-          label: shellHookInstalled
-            ? '卸载终端 zsh Hook（移除 ~/.zshrc 片段）'
-            : '安装终端 zsh Hook（写入 ~/.zshrc）',
+      submenu: SHELL_KINDS.map((kind) => {
+        const rcPath = rcPathFor(kind, os.homedir());
+        const installed = shellHookManager.installed(rcPath);
+        return {
+          label: `${installed ? '卸载' : '安装'} ${kind} Hook（${rcPath}）`,
           click: () => {
             if (shellHookManager.installed(rcPath)) {
               shellHookManager.uninstall(rcPath);
             } else {
-              shellHookManager.install(rcPath);
+              shellHookManager.install(rcPath, hookSourceFor(kind));
             }
             rebuildTrayMenu(config);
           },
-        },
-      ],
+        };
+      }),
     },
     { type: 'separator' },
     {

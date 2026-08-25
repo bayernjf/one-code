@@ -35,15 +35,20 @@ test('FileProbe: 窗口内快速变更触发 activity，静默后触发 done', a
   // try/finally：断言失败也必须关掉 watcher，否则进程因事件循环挂起不退出
   try {
     probe.start();
-    await sleep(100); // 等 chokidar 就绪
 
-    // 快速写入 3 个文件触发 activity
-    for (let i = 0; i < 3; i++) {
-      fs.writeFileSync(path.join(dir, `file-${i}.ts`), `content ${i}`);
-      await sleep(50);
-    }
-
-    await waitFor(() => events.some((e) => e.type === 'activity'), 3000, 'activity event');
+    // 持续写入直到 activity 出现，而不是「睡一会儿等 chokidar 就绪 + 正好写 3 个」：
+    // 慢机器上初始扫描没结束时写的文件会被漏掉，凑不满阈值
+    let seq = 0;
+    await waitFor(
+      () => {
+        if (!events.some((e) => e.type === 'activity')) {
+          fs.writeFileSync(path.join(dir, `file-${seq++}.ts`), `content ${seq}`);
+        }
+        return events.some((e) => e.type === 'activity');
+      },
+      5000,
+      'activity event'
+    );
     // 等静默超时触发 done
     await waitFor(() => events.some((e) => e.type === 'done'), 3000, 'done event');
   } finally {

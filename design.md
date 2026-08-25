@@ -118,7 +118,7 @@
 | **1. 骨架** | Electron 壳 + 托盘 + 设置页；现有纯逻辑迁为 `core` 包；文件探针 + 进程探针 | 覆盖所有"写文件"的工具：VS Code、Cursor、Claude Code、终端里的任何 AI（约 90% 诉求） |
 | **1a. core 抽取（✅ 已完成）** | `packages/core` 包：`types`/`transitions`/`format`/`paths`/`editWindow` + 单测；npm workspaces 打通扩展侧引用 | 纯逻辑与 vscode 解耦，可被 Electron 复用 |
 | **1b. 桌面骨架（✅ 已完成）** | `packages/desktop`：Electron 主进程 + 托盘 + 聚合引擎 + 设置窗口；文件探针（chokidar + RapidEditDetector）+ 进程探针 + 目录自动发现 + 配置持久化 + 产品 logo 托盘图标 | 可编译运行，完整设置 UI；待：端到端联调 |
-| **2. Shell Hook** | zsh 集成（precmd/preexec 写状态文件，守护进程消费） | 终端监控从"不可用"变"精确" |
+| **2. Shell Hook** | zsh / bash / fish 集成（命令开始/结束写状态文件，守护进程消费） | 终端监控从"不可用"变"精确" |
 | **3. Claude Desktop** | `~/.claude/projects/*.jsonl` 追加检测探针 | Claude 勾选项完整可用 |
 | **3a. Codex 会话探针（✅ 已完成）** | `~/.codex/sessions/**/rollout-*.jsonl` 生命周期事件探针 | ChatGPT 桌面端 / VS Code openai.chatgpt 扩展 / codex CLI 一并精确覆盖 |
 | **4. 伴侣与扩展（可选）** | 4a（✅ 已完成）：VS Code 扩展新增伴侣模式，经本地 socket 上报深度信号；4b：ChatGPT 浏览器扩展 | 深度信号 + 网页版覆盖（详见 §11） |
@@ -149,7 +149,7 @@ one-code/
 ## 10. 开放问题（待决策）
 
 - [ ] 多工作区目录的自动发现策略（最近活跃？固定列表？）
-- [x] Shell Hook 的安装引导流程 —— 阶段 2 已落地：托盘一键写入/卸载 `~/.zshrc` 片段
+- [x] Shell Hook 的安装引导流程 —— 阶段 2 已落地：托盘按 shell 一键写入/卸载 rc 片段（zsh `~/.zshrc`、bash `~/.bashrc`、fish `~/.config/fish/config.fish`）
 - [ ] Claude jsonl 解析的健壮性（格式未官方承诺，阶段 3 已实现，待端到端灰度验证）
 - [ ] Windows / Linux 支持优先级（当前先 macOS）
 - [ ] 独立 App 的自动更新方案
@@ -257,4 +257,4 @@ one-code/
 - 2026-08-24：阶段 4a 落地（守护进程伴侣 socket + VS Code 伴侣模式），§11.3/§11.6 更新为实际实现，§10 勾掉 socket 鉴权。
 - 2026-08-25：新增 `SignalAuthority` 信号权威性维度（§4）。Codex 探针落地后暴露出「弱探针抢报 done → 真 done 被状态机吞掉」的缺陷，聚合引擎新增一条仲裁：session 探针工作期间丢弃 heuristic 的 done。守护进程通知开始署名信号来源，来源展示名收归 core 单一来源。
 - 2026-08-25：Codex 会话探针落地。查明 ChatGPT 桌面端会 fork `ChatGPT.app/Contents/Resources/codex app-server` 子进程写 `~/.codex/sessions/**/rollout-*.jsonl`（`session_meta.originator = "Codex Desktop"`），且 rollout 带显式 `task_started` / `task_complete` 生命周期事件（2026-08 全量 2230 / 2224 近乎配对）。§4 中 ChatGPT 由「弱信号、低优先级」改为强信号已实现；§7 新增 3a；阶段 4b 浏览器扩展被此方案取代。
-
+- 2026-08-25：Shell Hook 扩展到 bash（`DEBUG` trap + `PROMPT_COMMAND`）与 fish（`fish_preexec` / `fish_postexec`），三者写同一状态文件，`ShellHookProbe` 不变；托盘按 shell 分列安装项。同日修掉 Claude 探针对启动前既存会话文件的历史重放（改为 seek 到末尾），并加固时序类单测（等累积事件而非瞬态状态）。

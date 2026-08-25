@@ -57,10 +57,13 @@ VS Code 插件，监控 AI 编码工具（Copilot Chat、Cline/Roo Code、终端
 │           │   └── settings.ts   # 渲染进程逻辑（ESM）
 │           ├── scripts/gen-tray-icon.js # 托盘图标生成脚本（纯 Node，无依赖）
 │           ├── resources/tray/ # 托盘图标 PNG（16/32 @2x，产品 logo）
-│           ├── test/            # 单测：aggregator / 各探针 / shellHook / companionServer / codexSessionProbe（48 用例）
+│           ├── test/            # 单测：aggregator / 各探针 / shellHook / companionServer / codexSessionProbe（60 用例）
 │           ├── shellHook/
-│           │   ├── zsh.ts        # zsh precmd/preexec 片段与状态文件格式
-│           │   └── manager.ts    # ~/.zshrc 片段幂等写入/移除
+│           │   ├── shared.ts     # 三种 shell 共用：捕获命令集、包裹标记、状态文件格式
+│           │   ├── zsh.ts        # zsh precmd/preexec 片段
+│           │   ├── bash.ts       # bash DEBUG trap + PROMPT_COMMAND 片段
+│           │   ├── fish.ts       # fish fish_preexec/fish_postexec 片段
+│           │   └── manager.ts    # 各 shell rc 文件片段幂等写入/移除
 │           ├── companion/
 │           │   ├── server.ts     # 伴侣 socket 服务端（Probe 实现，token 鉴权 + JSON lines）
 │           │   └── token.ts      # 鉴权 token 生成/读取（0600）
@@ -141,14 +144,14 @@ waiting → idle（用户确认）
 
 - [x] 阶段 1a：core 抽取（纯逻辑解耦为 `@ai-watchdog/core`）
 - [✅] 阶段 1b：Electron 壳 + 托盘 + 设置窗口 + 文件探针 + 进程探针（骨架、目录自动发现、配置持久化、托盘图标、设置窗口 UI、探针/聚合引擎单测均已完成；ad-hoc 签名解决 Gatekeeper 拦截；electron-builder 打包 mac dmg/zip 已验证通过；release 工作流 + electron-updater 自动更新（含完整事件流 + IPC + 设置页更新 UI，对齐 soft-desk）已就绪）
-- [x] 阶段 2：Shell Hook（zsh）精确终端监控（ShellHookProbe + 托盘一键安装/卸载 ~/.zshrc 片段 + 单测）
+- [x] 阶段 2：Shell Hook（zsh / bash / fish）精确终端监控（ShellHookProbe + 托盘按 shell 一键安装/卸载 rc 片段 + 单测，含真实 shell 语法与行为校验）
 - [x] 阶段 3：Claude Desktop 专用探针（`~/.claude/projects/*.jsonl` 追加检测 + 单测）
 - [x] 阶段 3a：Codex 会话探针（`~/.codex/sessions/**/rollout-*.jsonl` 生命周期事件 + 单测）—— 一个探针同时覆盖 ChatGPT 桌面端、VS Code openai.chatgpt 扩展、codex CLI
 - [x] 阶段 4a：守护进程 socket + VS Code 伴侣（core 协议层 + Desktop CompanionServer + 扩展 CompanionClient + 设置页开关 + 端到端验证）
 - [—] 阶段 4b：ChatGPT 浏览器扩展 —— **已搁置**，且桌面端已被阶段 3a 的 Codex 探针取代；仅 ChatGPT 网页版仍未覆盖
 - [ ] 阶段 4a 端到端灰度：真实 VS Code + 打包后守护进程联调，观察重复通知是否需调防抖窗口
 - [ ] 阶段 3a 端到端灰度：真实 ChatGPT 桌面端跑一轮任务，确认 activity/done 时序符合预期（多探针抢报问题已通过 `SignalAuthority` 仲裁修复并有回归测试，灰度主要看真实时序）
-- [ ] 时序类单测在 CPU 竞争下会闪断（ClaudeSessionProbe / FileProbe 的静默超时用例），与 `0938fe5` 同类；CI 上是既有的红灯来源
+- [x] 时序类单测加固：改为等累积事件而非瞬态 `isActive()`；FileProbe 改为「写到 activity 出现为止」，不再依赖固定 sleep 等 chokidar 就绪（CPU 打满下验证 60/60 通过）
 
 ### 必要项（发布前）
 
@@ -211,3 +214,4 @@ npm run dist:win --workspace @ai-watchdog/desktop # 打包 Windows 安装包（N
 - Codex rollout 格式非官方承诺；事件类型若改名，探针会静默失效（不误报）
 - 伴侣 socket 的 0600 权限只能挡住其他用户，同用户进程仍可读 token 文件伪造信号——本机同用户信任模型下可接受
 - 伴侣的 Windows 命名管道路径已实现但未实测（当前 macOS 优先）
+- fish hook 片段只做了静态生成，本机未装 fish，语法/行为用例在无 fish 环境下自动跳过

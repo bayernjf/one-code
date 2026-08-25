@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { ShellHookManager, wrapHook } from '../src/shellHook/manager';
-import { SHELL_HOOK_BEGIN, SHELL_HOOK_END } from '../src/shellHook/zsh';
+import { SHELL_HOOK_BEGIN, SHELL_HOOK_END } from '../src/shellHook/shared';
 
 /** 内存 mock 文件系统 */
 function memoryFs(initial: Record<string, string> = {}) {
@@ -16,6 +16,9 @@ function memoryFs(initial: Record<string, string> = {}) {
     },
     writeFileSync(p: string, data: string, _enc: 'utf-8'): void {
       files.set(p, data);
+    },
+    mkdirSync(_p: string, _opts: { recursive: true }): void {
+      // 内存 mock 无目录概念
     },
   };
 }
@@ -36,9 +39,9 @@ test('install: 首次安装写入带标记的片段', () => {
 test('install: 幂等，重复安装不重复追加', () => {
   const f = memoryFs({ '/tmp/.zshrc': 'export FOO=1\n' });
   const m = new ShellHookManager(f);
-  m.install('/tmp/.zshrc');
+  m.install('/tmp/.zshrc', 'echo hi');
   const first = f.files.get('/tmp/.zshrc') ?? '';
-  const second = m.install('/tmp/.zshrc');
+  const second = m.install('/tmp/.zshrc', 'echo hi');
   assert.equal(second.changed, false);
   assert.equal(f.files.get('/tmp/.zshrc'), first);
 });
@@ -47,7 +50,7 @@ test('install: 已存在 hook 时 installed 判定为 true 且不重复', () => 
   const f = memoryFs({ '/tmp/.zshrc': wrapHook('echox') });
   const m = new ShellHookManager(f);
   assert.equal(m.installed('/tmp/.zshrc'), true);
-  const res = m.install('/tmp/.zshrc');
+  const res = m.install('/tmp/.zshrc', 'echo hi');
   assert.equal(res.changed, false);
 });
 
