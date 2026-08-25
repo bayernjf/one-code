@@ -6,33 +6,7 @@
  * 这是「精确终端信号」：命令开始 = working，命令结束 = done。
  */
 
-/** 需要精确捕获的终端 AI CLI 命令名（与 config.DEFAULT_SHELL_TOOLS 保持一致） */
-export const SHELL_TOOLS = [
-  'claude',
-  'claude-code',
-  'codex',
-  'opencode',
-  'aider',
-  'gemini',
-  'qwen',
-  'codebuddy',
-] as const;
-
-/** zsh case 匹配模式（| 分隔） */
-export const SHELL_TOOLS_PATTERN = SHELL_TOOLS.join('|');
-
-/** 状态文件内容结构（zsh hook 写入，ShellHookProbe 解析） */
-export interface ShellSessionState {
-  active: boolean;
-  tool?: string;
-  pid?: number;
-  startedAt?: number;
-  updatedAt?: number;
-}
-
-/** 包裹标记：插入 ~/.zshrc 时用于定位整段，便于幂等安装 / 卸载 */
-export const SHELL_HOOK_BEGIN = '# >>> AI Watchdog shell hook >>>';
-export const SHELL_HOOK_END = '# <<< AI Watchdog shell hook <<<';
+import { SHELL_TOOLS_PATTERN } from './shared';
 
 /**
  * 可写入 ~/.zshrc 的 zsh 片段。
