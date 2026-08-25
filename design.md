@@ -80,6 +80,7 @@
 - 监听目录（默认：~/Projects 或自动发现最近活跃工作区）
 - 进程名匹配（如 "Cursor"、"claude"、"node.*claude"）
 - 灵敏度（窗口大小 / 阈值 / 静默超时 —— 复用现有配置项语义）
+- 最短工作时长门槛（`minWorkDuration`，短于此时长的任务不发完成通知）
 - 通知方式（声音 / 系统通知 / 仅失焦时）
 ```
 
@@ -136,6 +137,8 @@
 
 ## 9. 目录规划（阶段 1 落地时）
 
+> 实际落地与此略有偏差：探针没有独立成包，而是留在 `packages/desktop/src/probes/`——它们依赖 Electron 侧的运行时，单独成包只会多一层无人复用的边界。真实结构见 `handoff.md` 的项目结构一节。
+
 ```
 one-code/
 ├── packages/
@@ -148,12 +151,12 @@ one-code/
 
 ## 10. 开放问题（待决策）
 
-- [ ] 多工作区目录的自动发现策略（最近活跃？固定列表？）
+- [x] 多工作区目录的自动发现策略 —— 阶段 1b 已落地 `workspaceDiscovery.ts`，自动发现最近活跃工作区，用户可在设置页覆盖
 - [x] Shell Hook 的安装引导流程 —— 阶段 2 已落地：托盘按 shell 一键写入/卸载 rc 片段（zsh `~/.zshrc`、bash `~/.bashrc`、fish `~/.config/fish/config.fish`）
 - [ ] Claude jsonl 解析的健壮性（格式未官方承诺，阶段 3 已实现，待端到端灰度验证）
-- [ ] Windows / Linux 支持优先级（当前先 macOS）
-- [ ] 独立 App 的自动更新方案
-- [ ] 阶段 4b：浏览器扩展访问 localhost socket 的权限 / CORS 限制
+- [~] Windows / Linux 支持优先级 —— Windows 已适配（进程探针 `tasklist`、shell hook 只列 bash、CI 含 windows-latest、NSIS 安装包），但未在真实 Windows 上跑过；Linux 仍未动
+- [x] 独立 App 的自动更新方案 —— electron-updater（完整事件流 + IPC + 设置页更新 UI），随 release 工作流发布
+- [—] 阶段 4b：浏览器扩展访问 localhost socket 的权限 / CORS 限制 —— 随 4b 搁置，桌面端已由 Codex 探针覆盖
 - [x] 阶段 4a：socket 鉴权 —— 已用 token 文件（`~/.ai-watchdog/companion-token`，0600）+ Unix domain socket（0600）+ `timingSafeEqual` 比对解决
 
 ## 11. 阶段 4 详细设计：伴侣与扩展（可选）
@@ -245,9 +248,9 @@ one-code/
 ### 11.7 风险与开放问题
 
 - 浏览器扩展访问 localhost socket 的权限 / CORS 限制（可能需要本地转发 agent）—— 随 4b 搁置。
-- socket 安全：本机其他进程可能伪造信号 → 必须做 token 鉴权。
+- socket 安全：本机其他进程可能伪造信号 → 已用 token 文件（0600）+ `timingSafeEqual` 比对；同用户进程仍可读 token，本机同用户信任模型下接受。
 - Codex rollout 格式非官方承诺，解析全部宽松容错；事件类型若改名则探针静默失效（不误报，只是不再产出信号）。
-- Codex rollout 不落盘「等待用户批准」事件，因此该探针只产出 working / done / idle，拿不到 waiting。
+- Codex rollout 不落盘「等待用户批准」事件，因此该探针只产出 working / done / idle，拿不到 waiting。已实测确认（2026-08-26，见变更记录），不是待办而是本地取不到的信息。
 - `onDidWriteTerminalData` 发布版不可用 → VS Code 伴侣的深度价值受限，主信号仍靠浅层 + 守护进程探针。
 - 扩展改造需保持浅层功能完全兼容，避免回归。
 
@@ -259,3 +262,5 @@ one-code/
 - 2026-08-25：Codex 会话探针落地。查明 ChatGPT 桌面端会 fork `ChatGPT.app/Contents/Resources/codex app-server` 子进程写 `~/.codex/sessions/**/rollout-*.jsonl`（`session_meta.originator = "Codex Desktop"`），且 rollout 带显式 `task_started` / `task_complete` 生命周期事件（2026-08 全量 2230 / 2224 近乎配对）。§4 中 ChatGPT 由「弱信号、低优先级」改为强信号已实现；§7 新增 3a；阶段 4b 浏览器扩展被此方案取代。
 - 2026-08-25：Shell Hook 扩展到 bash（`DEBUG` trap + `PROMPT_COMMAND`）与 fish（`fish_preexec` / `fish_postexec`），三者写同一状态文件，`ShellHookProbe` 不变；托盘按 shell 分列安装项。同日修掉 Claude 探针对启动前既存会话文件的历史重放（改为 seek 到末尾），并加固时序类单测（等累积事件而非瞬态状态）。
 - 2026-08-25：Windows 适配（进程探针改用 `tasklist`，托盘只在可用平台列出对应 shell hook）。同日以「离线回放真实 rollout」方式完成阶段 3a 灰度：turn 生命周期严格配对，但 2334 次完成事件中多数 turn 仅 4~15 秒，据此新增**最短工作时长门槛**（`minWorkDuration`，默认 30 秒）——通知的价值只在「你已经走开了」的场景，短任务只流转状态不通知；`waiting` 不受门槛限制，因为被堵住时越早知道越好。
+- 2026-08-26：结案「Codex 能否检测等待用户批准」——**本地产物取不到，不再投入**。取证：本机 `~/.codex/config.toml` 未设审批策略，`state_5.sqlite` 的 `threads.approval_mode` 实际以 `on-request` 为主（审批确实会发生，问题不是无效命题）；codex 二进制里存在 `exec_approval_request` / `apply_patch_approval_request` 协议变体，但 307 个 rollout（约 120 万行）里出现 0 次——审批请求是走 `~/.codex/ipc/ipc.sock` 的瞬态 IPC，不落盘。`queued_items` 只存用户排队消息，不是审批队列。退一步想用「已发出但未回填的 `function_call` + 静默」当代理信号也不成立：0/307 个文件以未配对的 `function_call` 结尾，说明 call 与 output 是成对追加的，等待期间文件完全静默，与「正在思考」无法区分；而 4485 对调用的间隔 p90 已达 22.7 秒、最长 480 秒，纯超时判定必然误报。唯一可行路径是解析私有 IPC socket，收益不抵脆弱性，明确不做。
+- 2026-08-26：文档对账。校正与代码脱节处：core 用例数 20→22、`npm run test:unit` 实际已改名 `npm test`、`sourceName.ts` 与 `notificationCoordinator.ts` 补进结构树、进程探针注明双平台命令。§9 补注探针未独立成包的实际取舍；§10 勾掉已解决项（工作区自动发现、自动更新、socket 鉴权），Windows 标为「已适配未实测」。同时记录一处真实缺口：`minWorkDuration` 已持久化生效但设置页未暴露入口。
