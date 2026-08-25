@@ -147,7 +147,8 @@ waiting → idle（用户确认）
 - [x] 阶段 4a：守护进程 socket + VS Code 伴侣（core 协议层 + Desktop CompanionServer + 扩展 CompanionClient + 设置页开关 + 端到端验证）
 - [—] 阶段 4b：ChatGPT 浏览器扩展 —— **已搁置**，且桌面端已被阶段 3a 的 Codex 探针取代；仅 ChatGPT 网页版仍未覆盖
 - [ ] 阶段 4a 端到端灰度：真实 VS Code + 打包后守护进程联调，观察重复通知是否需调防抖窗口
-- [ ] 阶段 3a 端到端灰度：真实 ChatGPT 桌面端跑一轮任务，确认 activity/done 时序符合预期
+- [ ] 阶段 3a 端到端灰度：真实 ChatGPT 桌面端跑一轮任务，确认 activity/done 时序符合预期（多探针抢报问题已通过 `SignalAuthority` 仲裁修复并有回归测试，灰度主要看真实时序）
+- [ ] 时序类单测在 CPU 竞争下会闪断（ClaudeSessionProbe / FileProbe 的静默超时用例），与 `0938fe5` 同类；CI 上是既有的红灯来源
 
 ### 必要项（发布前）
 
@@ -198,6 +199,7 @@ npm run dist:win --workspace @ai-watchdog/desktop # 打包 Windows 安装包（N
 7. **伴侣只上报不判断**：扩展经 socket 上报深度信号，状态判断/防抖/通知全留在守护进程；信号分级放在信号源侧，聚合引擎不为弱信号引入新仲裁机制
 8. **伴侣鉴权用 token 文件**：`~/.ai-watchdog/companion-token`（0600）+ Unix domain socket（0600），避免端口冲突与防火墙提示；守护进程未运行时伴侣静默退避重连，不打扰用户
 9. **Codex 状态取显式事件而非静默超时**：rollout 里有 `task_started` / `task_complete` / `turn_aborted`，比 Claude 探针的「追加停止 + 防抖」精确；并发 turn 用 Map 计数，全部结束才报 done，另设 30 分钟兜底清理，避免宿主崩溃后永久卡在 working
+10. **信号权威性只解一个问题**：`SignalAuthority` 只用来让 session 探针工作期间压制 heuristic 的 `done`，不做别的仲裁；分级由探针 `fire()` 时自己声明，缺省 heuristic（顺带使伴侣无法经 socket 自称 session）
 
 ## 已知限制
 

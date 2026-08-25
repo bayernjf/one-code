@@ -59,6 +59,17 @@
 - **强信号**：文件变更、Shell Hook、官方数据文件（Claude jsonl、Codex rollout）→ 可独立触发状态转移
 - **弱信号**：窗口标题、进程 CPU、剪贴板 → 仅做辅助仲裁，**不单独触发通知**
 
+**信号权威性（`SignalAuthority`，2026-08-25 新增）**：与上面的强/弱是**另一个维度**——强弱说的是「信号可不可信」，权威性说的是「结束是被告知的还是猜的」。
+
+| 权威性 | 含义 | 探针 |
+|---|---|---|
+| `session` | 宿主明确告知的会话生命周期 | Codex rollout（`task_complete`）、Shell Hook（precmd/preexec） |
+| `heuristic` | 静默超时 / 频率窗口 / 文本模式推断（缺省值） | 文件探针、进程探针、Claude jsonl、VS Code 伴侣 |
+
+**唯一的仲裁规则**：session 探针处于工作中时，heuristic 的 `done` 被丢弃。分级仍由信号源自己声明（探针 `fire()` 时标注），聚合引擎只执行这一条规则。
+
+起因：Codex 一轮任务通常先改几个文件、再长时间推理，文件探针 8 秒静默超时会抢先报 done 把状态推到 Done，随后真正的 `task_complete` 因 `done` 只允许 `Working → Done` 而被静默吞掉——用户先收到一条署名错误的假通知，再也收不到真通知。
+
 ## 5. 设置页设计
 
 ```
@@ -244,5 +255,6 @@ one-code/
 
 - 2026-08-24：新增 §11 阶段 4 详细设计（伴侣与扩展）；更新 §10 开放问题。
 - 2026-08-24：阶段 4a 落地（守护进程伴侣 socket + VS Code 伴侣模式），§11.3/§11.6 更新为实际实现，§10 勾掉 socket 鉴权。
+- 2026-08-25：新增 `SignalAuthority` 信号权威性维度（§4）。Codex 探针落地后暴露出「弱探针抢报 done → 真 done 被状态机吞掉」的缺陷，聚合引擎新增一条仲裁：session 探针工作期间丢弃 heuristic 的 done。守护进程通知开始署名信号来源，来源展示名收归 core 单一来源。
 - 2026-08-25：Codex 会话探针落地。查明 ChatGPT 桌面端会 fork `ChatGPT.app/Contents/Resources/codex app-server` 子进程写 `~/.codex/sessions/**/rollout-*.jsonl`（`session_meta.originator = "Codex Desktop"`），且 rollout 带显式 `task_started` / `task_complete` 生命周期事件（2026-08 全量 2230 / 2224 近乎配对）。§4 中 ChatGPT 由「弱信号、低优先级」改为强信号已实现；§7 新增 3a；阶段 4b 浏览器扩展被此方案取代。
 
