@@ -126,15 +126,17 @@ test('ClaudeSessionProbe: 新会话 add -> activity，静默超时 -> done', asy
 
     // 新会话文件创建（add）
     writeSession(dir, 's1', assistantLine('Starting work') + '\n');
-    await waitFor(() => probe.isActive(), 3000, 'activity after session start');
+    // 等事件而不是等 probe.isActive()：后者是瞬态，静默超时一到就被清掉，
+    // 慢机器上会永远等不到，是这几个用例历史上偶发失败的原因
+    await waitFor(
+      () => events.some((e) => e.type === 'activity'),
+      3000,
+      'activity after session start'
+    );
 
     // 静默超时 -> done
-    await waitFor(
-      () => !probe.isActive() && events.some((e) => e.type === 'done'),
-      3000,
-      'done after silence timeout'
-    );
-    assert.equal(events.some((e) => e.type === 'activity'), true);
+    await waitFor(() => events.some((e) => e.type === 'done'), 3000, 'done after silence timeout');
+    assert.equal(probe.isActive(), false);
   } finally {
     probe.stop();
     fs.rmSync(dir, { recursive: true, force: true });
@@ -154,7 +156,11 @@ test('ClaudeSessionProbe: 启动前已存在的会话不重放历史，仅报 ac
     await sleep(200);
 
     fs.appendFileSync(file, assistantLine('Still working') + '\n');
-    await waitFor(() => probe.isActive(), 3000, 'activity on first change');
+    await waitFor(
+      () => events.some((e) => e.type === 'activity'),
+      3000,
+      'activity on first change'
+    );
 
     assert.equal(events.some((e) => e.type === 'waiting'), false);
     assert.equal(events.filter((e) => e.type === 'activity').length, 1);
@@ -175,15 +181,20 @@ test('ClaudeSessionProbe: 追加 assistant 提问 -> waiting', async () => {
     await sleep(200);
 
     const file = writeSession(dir, 's2', assistantLine('Working...') + '\n');
-    await waitFor(() => probe.isActive(), 3000, 'activity after session start');
+    await waitFor(
+      () => events.some((e) => e.type === 'activity'),
+      3000,
+      'activity after session start'
+    );
 
     // 追加提问行
     fs.appendFileSync(file, assistantLine('Should I proceed?') + '\n');
     await waitFor(
-      () => !probe.isActive() && events.some((e) => e.type === 'waiting'),
+      () => events.some((e) => e.type === 'waiting'),
       3000,
       'waiting after question'
     );
+    assert.equal(probe.isActive(), false);
   } finally {
     probe.stop();
     fs.rmSync(dir, { recursive: true, force: true });
