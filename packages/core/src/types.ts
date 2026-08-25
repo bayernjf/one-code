@@ -41,11 +41,25 @@ export interface ActivityEvent {
 }
 
 /** 监控器发出的事件 */
+/**
+ * 信号权威性（分级留在信号源侧，探针自己声明）
+ *
+ * - `session`：宿主给出的确定性会话生命周期信号（Codex `task_complete`、
+ *   Shell Hook 的 precmd/preexec）。「结束」是被告知的，不是猜的。
+ * - `heuristic`：靠静默超时、频率窗口、文本模式推断出来的信号。
+ *
+ * 唯一用途：`session` 探针处于工作中时，压制 `heuristic` 的 done —— 否则文件
+ * 探针的静默超时会抢在 Codex 真正完成前误报，并把真通知吞掉。
+ */
+export type SignalAuthority = 'session' | 'heuristic';
+
 export interface MonitorEvent {
   source: MonitorSource;
   type: 'activity' | 'done' | 'waiting' | 'idle';
   files?: string[];
   message?: string;
+  /** 缺省视为 heuristic：不声明就按「猜的」处理，也让伴侣无法经 socket 自称 session */
+  authority?: SignalAuthority;
 }
 
 /** 状态变更事件 */
