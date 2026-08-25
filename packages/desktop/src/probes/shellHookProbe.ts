@@ -97,7 +97,8 @@ export class ShellHookProbe implements Probe {
     }
   }
 
+  /** precmd/preexec 是宿主告知的确定性生命周期，属 session 级 */
   private fire(event: MonitorEvent): void {
-    this.emitter.emit('event', event);
+    this.emitter.emit('event', { ...event, authority: 'session' });
   }
 }

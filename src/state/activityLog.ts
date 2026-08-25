@@ -1,6 +1,9 @@
 import * as vscode from 'vscode';
 import { ActivityEvent, AIStatus, MonitorSource } from '../monitors/types';
 
+// 来源展示名由 core 统一提供，此处再导出以保持既有引用路径不变
+export { getSourceName } from '@ai-watchdog/core';
+
 let eventCounter = 0;
 
 const STORAGE_KEY = 'aiWatchdog.activityLog';
@@ -156,24 +159,3 @@ export function getStatusIcon(status: AIStatus): string {
   }
 }
 
-/** 获取来源的显示名称 */
-export function getSourceName(source: MonitorSource): string {
-  switch (source) {
-    case MonitorSource.FileWatcher:
-      return '文件监控';
-    case MonitorSource.Terminal:
-      return '终端';
-    case MonitorSource.Copilot:
-      return 'Copilot';
-    case MonitorSource.Cline:
-      return 'Cline/Roo';
-    case MonitorSource.ShellHook:
-      return 'Shell Hook';
-    case MonitorSource.Claude:
-      return 'Claude';
-    case MonitorSource.Codex:
-      return 'ChatGPT / Codex';
-    case MonitorSource.VSCodeCompanion:
-      return 'VS Code 伴侣';
-  }
-}

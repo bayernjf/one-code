@@ -4,3 +4,4 @@ export * from './format';
 export * from './paths';
 export * from './editWindow';
 export * from './companion';
+export * from './sourceName';

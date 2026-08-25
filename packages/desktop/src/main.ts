@@ -1,7 +1,7 @@
 import { app, Tray, Menu, nativeImage, Notification } from 'electron';
 import os from 'node:os';
 import path from 'node:path';
-import { AIStatus, MonitorSource, companionTokenPath } from '@ai-watchdog/core';
+import { AIStatus, MonitorSource, companionTokenPath, getSourceName } from '@ai-watchdog/core';
 import { DesktopConfig } from './config';
 import { ConfigStore } from './configStore';
 import { discoverWorkspaces } from './workspaceDiscovery';
@@ -109,8 +109,10 @@ function restartProbes(config: DesktopConfig): void {
 }
 
 function showNotification(payload: { type: 'done' | 'waiting'; source: MonitorSource }): void {
-  const title = payload.type === 'done' ? 'AI 已完成任务' : 'AI 等待你的输入';
-  const body = payload.type === 'done' ? 'AI 活动已停止，可以回来接管了' : 'AI 需要你确认或输入';
+  const sourceName = getSourceName(payload.source);
+  const title = payload.type === 'done' ? `${sourceName} 已完成任务` : `${sourceName} 等待你的输入`;
+  const body =
+    payload.type === 'done' ? '活动已停止，可以回来接管了' : '需要你确认或输入';
   console.log(`[notify] ${payload.type} (source: ${payload.source})`);
   new Notification({ title, body, silent: false }).show();
 }
