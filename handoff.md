@@ -37,8 +37,9 @@ VS Code 插件，监控 AI 编码工具（Copilot Chat、Cline/Roo Code、终端
 │       │   ├── format.ts     # formatDuration 时长格式化
 │       │   ├── paths.ts      # shouldIgnorePath 路径过滤
 │       │   ├── editWindow.ts # RapidEditDetector 滑动窗口检测
-│       │   └── companion.ts  # 伴侣 socket 协议：帧类型 + parseCompanionLine + socket/token 路径
-│       └── test/             # core.test.ts / companion.test.ts（20 用例）
+│       │   ├── companion.ts  # 伴侣 socket 协议：帧类型 + parseCompanionLine + socket/token 路径
+│       │   └── sourceName.ts # 信号来源展示名（通知署名的单一来源）
+│       └── test/             # core.test.ts / companion.test.ts（22 用例）
 ├── packages/
 │   └── desktop/              # @ai-watchdog/desktop：Electron 桌面应用（统一监控产品）
 │       ├── package.json
@@ -48,7 +49,7 @@ VS Code 插件，监控 AI 编码工具（Copilot Chat、Cline/Roo Code、终端
 │           ├── config.ts     # 监控目标配置（WatchTarget）
 │           ├── configStore.ts # 配置持久化（JSON 存 userData）
 │           ├── workspaceDiscovery.ts # 工作区目录自动发现
-│           ├── aggregator.ts # 状态聚合引擎（复用 core 状态机 + 防抖）
+│           ├── aggregator.ts # 状态聚合引擎（复用 core 状态机 + 防抖 + 最短工作时长门槛）
 │           ├── updater.ts    # electron-updater 自动更新（事件流 + IPC）
 │           ├── settingsWindow.ts # 设置窗口（BrowserWindow + IPC）
 │           ├── preload.ts    # contextBridge 暴露 settingsAPI
@@ -70,7 +71,7 @@ VS Code 插件，监控 AI 编码工具（Copilot Chat、Cline/Roo Code、终端
 │           └── probes/
 │               ├── probe.ts      # 探针接口（宿主无关）
 │               ├── fileProbe.ts  # 文件探针（chokidar + RapidEditDetector）
-│               ├── processProbe.ts # 进程探针（ps 轮询，弱信号）
+│               ├── processProbe.ts # 进程探针（弱信号；轮询 ps，Windows 用 tasklist）
 │               ├── shellHookProbe.ts # Shell Hook 状态文件探针（强信号）
 │               ├── claudeSessionProbe.ts # Claude 会话 jsonl 追加检测
 │               └── codexSessionProbe.ts # Codex rollout 生命周期事件探针（ChatGPT 桌面端 / VS Code 扩展 / CLI）
@@ -91,6 +92,7 @@ VS Code 插件，监控 AI 编码工具（Copilot Chat、Cline/Roo Code、终端
     ├── notifications/
     │   ├── statusBar.ts      # 状态栏指示器（旋转图标 + 计时 + 闪烁）
     │   ├── notifier.ts       # VS Code 弹窗通知（带操作按钮）
+    │   ├── notificationCoordinator.ts # done/waiting 通知防抖合并
     │   ├── soundPlayer.ts    # 跨平台声音（macOS afplay / Linux paplay / Win PowerShell）
     │   └── desktopNotify.ts  # node-notifier 桌面通知（仅失焦时触发）
     └── views/
@@ -132,7 +134,7 @@ waiting → idle（用户确认）
 - [x] 通知防抖：新增 NotificationCoordinator，done/waiting 通知 1.5s 窗口合并
 - [x] 活动日志持久化（vscode.globalState，跨会话保存最近 100 条）
 - [x] "一键接管" 命令 `aiwatchdog.takeover`：定位并打开最近改动文件末尾（通知"查看变更"按钮触发）
-- [x] 单元测试：`npm run test:unit`（node:test + tsx），覆盖状态机/滑动窗口/文件过滤/时长格式化
+- [x] 单元测试：`npm test`（node:test + tsx），覆盖状态机/滑动窗口/文件过滤/时长格式化
 - [x] 纯逻辑解耦：提取 `monitors/editWindow.ts`、`util/paths.ts`、`state/transitions.ts`、`util/format.ts`（不依赖 vscode，可单测）
 - [x] core 包抽取（阶段 1a）：`packages/core`（`@ai-watchdog/core`），纯逻辑 + 类型迁入；npm workspaces 打通扩展侧引用；单测迁至 `packages/core/test`
 - [x] 桌面应用骨架（阶段 1b 初版）：`packages/desktop`（`@ai-watchdog/desktop`），Electron 主进程 + 托盘 + 聚合引擎 + 文件探针（chokidar + RapidEditDetector）+ 进程探针（ps 轮询）；可编译运行
@@ -152,7 +154,7 @@ waiting → idle（用户确认）
 - [ ] 阶段 4a 端到端灰度：真实 VS Code + 打包后守护进程联调，观察重复通知是否需调防抖窗口
 - [x] 阶段 3a 灰度（离线回放方式）：把本机全部真实 rollout 喂给探针逻辑，turn 生命周期严格配对（已结束文件无悬挂 turn）。回放同时暴露出通知量问题——2334 次完成事件里大量 turn 只跑 4~15 秒，已加最短工作时长门槛（默认 30s，降到 404 次）
 - [ ] 阶段 3a 在线灰度：真实 ChatGPT 桌面端跑一轮长任务，确认门槛生效后通知时机符合直觉
-- [x] 时序类单测加固：改为等累积事件而非瞬态 `isActive()`；FileProbe 改为「写到 activity 出现为止」，不再依赖固定 sleep 等 chokidar 就绪（CPU 打满下验证 60/60 通过）
+- [x] 时序类单测加固：改为等累积事件而非瞬态 `isActive()`；FileProbe 改为「写到 activity 出现为止」，不再依赖固定 sleep 等 chokidar 就绪（CPU 打满下全量通过）
 
 ### 必要项（发布前）
 
@@ -164,6 +166,7 @@ waiting → idle（用户确认）
 - [x] 多根工作区 fileWatcher 优化（VS Code 的 `createFileSystemWatcher('**/...')` 原生覆盖所有 workspace folder，已满足）
 - [x] "一键接管"：聚焦编辑器并定位到最近变更位置
 - [x] 单元测试（状态机、滑动窗口、文件过滤）
+- [ ] 设置页暴露 `minWorkDuration`（目前只能手改配置 JSON）
 
 ### 发布
 
@@ -204,6 +207,7 @@ npm run dist:win --workspace @ai-watchdog/desktop # 打包 Windows 安装包（N
 8. **伴侣鉴权用 token 文件**：`~/.ai-watchdog/companion-token`（0600）+ Unix domain socket（0600），避免端口冲突与防火墙提示；守护进程未运行时伴侣静默退避重连，不打扰用户
 9. **Codex 状态取显式事件而非静默超时**：rollout 里有 `task_started` / `task_complete` / `turn_aborted`，比 Claude 探针的「追加停止 + 防抖」精确；并发 turn 用 Map 计数，全部结束才报 done，另设 30 分钟兜底清理，避免宿主崩溃后永久卡在 working
 10. **信号权威性只解一个问题**：`SignalAuthority` 只用来让 session 探针工作期间压制 heuristic 的 `done`，不做别的仲裁；分级由探针 `fire()` 时自己声明，缺省 heuristic（顺带使伴侣无法经 socket 自称 session）
+11. **完成通知设最短工作时长门槛**：通知的价值只在「你已经走开了」的场景，因此短于 `minWorkDuration`（默认 30s）的任务只流转状态不通知。门槛用 setter 而非构造参数——聚合引擎是模块级单例，创建早于配置加载，且设置页可运行时改值。`waiting` 不设门槛：被堵住时越早知道越好；工作起点未观察到（探针刚重启）时时长未知，照常通知
 
 ## 已知限制
 
@@ -212,7 +216,7 @@ npm run dist:win --workspace @ai-watchdog/desktop # 打包 Windows 安装包（N
 - 终端 proposed API 需要 `--enable-proposed-api` 启动参数，正式发布版不可用 → 伴侣模式下该深度信号同样受限
 - VS Code 扩展形态本身无法监控非 fork 独立产品（Claude Desktop / ChatGPT），这部分由桌面守护进程覆盖（见 `design.md`）
 - Codex 探针拿不到 waiting：rollout 不落盘「等待用户批准」事件，只能给 working / done / idle。2026-08-26 已取证结案（307 个 rollout 里审批事件 0 次，请求走私有 IPC socket），不是待办
-- 完成通知有最短工作时长门槛（默认 30s），短任务只改状态不通知；`waiting` 不受门槛限制
+- 完成通知有最短工作时长门槛（默认 30s），短任务只改状态不通知；`waiting` 不受门槛限制。该项已持久化并在启动/保存时生效，但设置页尚未提供入口，改值需手改 userData 下的配置 JSON
 - Windows 版进程探针用 `tasklist`，但整体未在真实 Windows 上跑过；zsh / fish hook 在 Windows 不提供（只留 bash，需 Git Bash 或 WSL）
 - Codex rollout 格式非官方承诺；事件类型若改名，探针会静默失效（不误报）
 - 伴侣 socket 的 0600 权限只能挡住其他用户，同用户进程仍可读 token 文件伪造信号——本机同用户信任模型下可接受
