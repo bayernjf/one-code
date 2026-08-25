@@ -121,16 +121,19 @@ test('ClaudeSessionProbe: 新会话 add -> activity，静默超时 -> done', asy
   // try/finally：断言失败也必须关掉 watcher，否则进程因事件循环挂起不退出
   try {
     probe.start();
-    // 等 chokidar 初始扫描完成，避免 add 被 ignoreInitial 吞掉
-    await sleep(200);
 
-    // 新会话文件创建（add）
-    writeSession(dir, 's1', assistantLine('Starting work') + '\n');
-    // 等事件而不是等 probe.isActive()：后者是瞬态，静默超时一到就被清掉，
-    // 慢机器上会永远等不到，是这几个用例历史上偶发失败的原因
+    // 不断建新会话文件直到 activity 出现。固定 sleep 等 chokidar 就绪在负载下不够，
+    // 初始扫描没结束时建的文件会被 ignoreInitial 当成既存文件吞掉。
+    // 等事件而不是等 probe.isActive()：后者是瞬态，静默超时一到就被清掉。
+    let seq = 0;
     await waitFor(
-      () => events.some((e) => e.type === 'activity'),
-      3000,
+      () => {
+        if (!events.some((e) => e.type === 'activity')) {
+          writeSession(dir, `s${seq++}`, assistantLine('Starting work') + '\n');
+        }
+        return events.some((e) => e.type === 'activity');
+      },
+      5000,
       'activity after session start'
     );
 

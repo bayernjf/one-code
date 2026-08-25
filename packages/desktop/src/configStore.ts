@@ -27,6 +27,7 @@ export class ConfigStore {
         windowSize: parsed.windowSize ?? defaults.windowSize,
         activityThreshold: parsed.activityThreshold ?? defaults.activityThreshold,
         silenceTimeout: parsed.silenceTimeout ?? defaults.silenceTimeout,
+        minWorkDuration: parsed.minWorkDuration ?? defaults.minWorkDuration,
         shellHook: {
           ...defaults.shellHook,
           ...(parsed.shellHook ?? {}),

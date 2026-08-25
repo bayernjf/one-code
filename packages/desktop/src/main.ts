@@ -18,9 +18,9 @@ import { ensureToken } from './companion/token';
 import { Aggregator } from './aggregator';
 import {
   ShellHookManager,
-  SHELL_KINDS,
   hookSourceFor,
   rcPathFor,
+  shellsForPlatform,
 } from './shellHook/manager';
 
 let tray: Tray | undefined;
@@ -160,7 +160,7 @@ function rebuildTrayMenu(config: DesktopConfig): void {
     {
       label: '终端 Shell Hook',
       type: 'submenu',
-      submenu: SHELL_KINDS.map((kind) => {
+      submenu: shellsForPlatform(process.platform).map((kind) => {
         const rcPath = rcPathFor(kind, os.homedir());
         const installed = shellHookManager.installed(rcPath);
         return {
@@ -211,12 +211,14 @@ app.whenReady().then(() => {
 
   configStore = new ConfigStore();
   const config = configStore.load();
+  aggregator.setMinWorkDuration(config.minWorkDuration);
   fillWatchDirs(config);
 
   restartProbes(config);
 
   // 设置窗口：保存配置后重启探针
   settingsWindow = new SettingsWindow(configStore, (savedConfig) => {
+    aggregator.setMinWorkDuration(savedConfig.minWorkDuration);
     fillWatchDirs(savedConfig);
     restartProbes(savedConfig);
     rebuildTrayMenu(savedConfig);

@@ -35,6 +35,16 @@ const SHELL_SPECS: Record<ShellKind, { rc: (home: string) => string; source: str
   },
 };
 
+/**
+ * 当前平台值得展示的 shell。
+ *
+ * Windows 原生没有这三种 shell；只有 bash 可能经 Git Bash / WSL 存在，
+ * 因此只留 bash，避免给出装了也没用的 zsh / fish 入口。
+ */
+export function shellsForPlatform(platform: string): readonly ShellKind[] {
+  return platform === 'win32' ? ['bash'] : SHELL_KINDS;
+}
+
 /** 指定 shell 的 rc 文件路径 */
 export function rcPathFor(kind: ShellKind, homedir: string): string {
   return SHELL_SPECS[kind].rc(homedir);

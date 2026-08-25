@@ -57,7 +57,7 @@ VS Code 插件，监控 AI 编码工具（Copilot Chat、Cline/Roo Code、终端
 │           │   └── settings.ts   # 渲染进程逻辑（ESM）
 │           ├── scripts/gen-tray-icon.js # 托盘图标生成脚本（纯 Node，无依赖）
 │           ├── resources/tray/ # 托盘图标 PNG（16/32 @2x，产品 logo）
-│           ├── test/            # 单测：aggregator / 各探针 / shellHook / companionServer / codexSessionProbe（60 用例）
+│           ├── test/            # 单测：aggregator / 各探针 / shellHook / companionServer / codexSessionProbe（67 用例）
 │           ├── shellHook/
 │           │   ├── shared.ts     # 三种 shell 共用：捕获命令集、包裹标记、状态文件格式
 │           │   ├── zsh.ts        # zsh precmd/preexec 片段
@@ -150,7 +150,8 @@ waiting → idle（用户确认）
 - [x] 阶段 4a：守护进程 socket + VS Code 伴侣（core 协议层 + Desktop CompanionServer + 扩展 CompanionClient + 设置页开关 + 端到端验证）
 - [—] 阶段 4b：ChatGPT 浏览器扩展 —— **已搁置**，且桌面端已被阶段 3a 的 Codex 探针取代；仅 ChatGPT 网页版仍未覆盖
 - [ ] 阶段 4a 端到端灰度：真实 VS Code + 打包后守护进程联调，观察重复通知是否需调防抖窗口
-- [ ] 阶段 3a 端到端灰度：真实 ChatGPT 桌面端跑一轮任务，确认 activity/done 时序符合预期（多探针抢报问题已通过 `SignalAuthority` 仲裁修复并有回归测试，灰度主要看真实时序）
+- [x] 阶段 3a 灰度（离线回放方式）：把本机全部真实 rollout 喂给探针逻辑，turn 生命周期严格配对（已结束文件无悬挂 turn）。回放同时暴露出通知量问题——2334 次完成事件里大量 turn 只跑 4~15 秒，已加最短工作时长门槛（默认 30s，降到 404 次）
+- [ ] 阶段 3a 在线灰度：真实 ChatGPT 桌面端跑一轮长任务，确认门槛生效后通知时机符合直觉
 - [x] 时序类单测加固：改为等累积事件而非瞬态 `isActive()`；FileProbe 改为「写到 activity 出现为止」，不再依赖固定 sleep 等 chokidar 就绪（CPU 打满下验证 60/60 通过）
 
 ### 必要项（发布前）
@@ -211,6 +212,8 @@ npm run dist:win --workspace @ai-watchdog/desktop # 打包 Windows 安装包（N
 - 终端 proposed API 需要 `--enable-proposed-api` 启动参数，正式发布版不可用 → 伴侣模式下该深度信号同样受限
 - VS Code 扩展形态本身无法监控非 fork 独立产品（Claude Desktop / ChatGPT），这部分由桌面守护进程覆盖（见 `design.md`）
 - Codex 探针拿不到 waiting：rollout 不落盘「等待用户批准」事件，只能给 working / done / idle
+- 完成通知有最短工作时长门槛（默认 30s），短任务只改状态不通知；`waiting` 不受门槛限制
+- Windows 版进程探针用 `tasklist`，但整体未在真实 Windows 上跑过；zsh / fish hook 在 Windows 不提供（只留 bash，需 Git Bash 或 WSL）
 - Codex rollout 格式非官方承诺；事件类型若改名，探针会静默失效（不误报）
 - 伴侣 socket 的 0600 权限只能挡住其他用户，同用户进程仍可读 token 文件伪造信号——本机同用户信任模型下可接受
 - 伴侣的 Windows 命名管道路径已实现但未实测（当前 macOS 优先）
