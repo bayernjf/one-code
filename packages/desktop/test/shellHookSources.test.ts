@@ -4,7 +4,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync, spawnSync } from 'node:child_process';
-import { SHELL_KINDS, hookSourceFor, rcPathFor } from '../src/shellHook/manager';
+import {
+  SHELL_KINDS,
+  hookSourceFor,
+  rcPathFor,
+  shellsForPlatform,
+} from '../src/shellHook/manager';
 import { BASH_HOOK_SOURCE } from '../src/shellHook/bash';
 import { FISH_HOOK_SOURCE } from '../src/shellHook/fish';
 import { ZSH_HOOK_SOURCE } from '../src/shellHook/zsh';
@@ -102,4 +107,10 @@ test('bash hook: AI CLI 写 active，结束写 done，非 AI 命令不动状态'
       [true, 'codex'],
     ]
   );
+});
+
+test('shellsForPlatform: Windows 只给 bash（Git Bash / WSL），其他平台给全部', () => {
+  assert.deepEqual([...shellsForPlatform('win32')], ['bash']);
+  assert.deepEqual([...shellsForPlatform('darwin')], [...SHELL_KINDS]);
+  assert.deepEqual([...shellsForPlatform('linux')], [...SHELL_KINDS]);
 });

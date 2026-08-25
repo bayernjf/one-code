@@ -12,12 +12,23 @@ type ExecFileFn = (
 ) => void;
 
 /**
+ * 按平台给出「列出所有进程名」的命令。
+ *
+ * Windows 上没有 `ps`，用 `tasklist`（`wmic` 在 Win11 已移除）。输出是
+ * `"Code.exe","1234",...` 这样的 CSV，进程名仍在行内，正则匹配方式不变。
+ */
+export function processListCommand(platform: string): { cmd: string; args: string[] } {
+  if (platform === 'win32') {
+    return { cmd: 'tasklist', args: ['/FO', 'CSV', '/NH'] };
+  }
+  return { cmd: 'ps', args: ['-axo', 'comm'] };
+}
+
+/**
  * 进程探针 - 检测目标应用进程是否活跃
  *
  * 这是「弱信号」探针：仅用于辅助仲裁（例如目标 App 已退出时
  * 立即判定 done），不单独触发「工作中」状态转移。
- *
- * macOS 实现用 `ps -axo comm` 轮询；后续按平台扩展。
  */
 export class ProcessProbe implements Probe {
   readonly source = MonitorSource.Terminal;
@@ -29,7 +40,8 @@ export class ProcessProbe implements Probe {
   constructor(
     private processPatterns: string[],
     private intervalMs: number = 3000,
-    private execFile: ExecFileFn = execFileImpl
+    private execFile: ExecFileFn = execFileImpl,
+    private platform: string = process.platform
   ) {}
 
   start(): void {
@@ -53,7 +65,8 @@ export class ProcessProbe implements Probe {
   }
 
   private poll(): void {
-    this.execFile('ps', ['-axo', 'comm'], { maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
+    const { cmd, args } = processListCommand(this.platform);
+    this.execFile(cmd, args, { maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
       if (err) {
         return;
       }

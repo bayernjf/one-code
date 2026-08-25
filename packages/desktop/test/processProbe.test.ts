@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { MonitorEvent } from '@ai-watchdog/core';
-import { ProcessProbe } from '../src/probes/processProbe';
+import { ProcessProbe, processListCommand } from '../src/probes/processProbe';
 
 /** 构造 mock execFile，返回指定 stdout */
 function mockExec(stdout: string) {
@@ -63,4 +63,34 @@ test('ProcessProbe: execFile 出错时不改变状态', async () => {
 
   assert.equal(probe.isActive(), false);
   assert.equal(events.length, 0);
+});
+
+test('processListCommand: Windows 用 tasklist，其他平台用 ps', () => {
+  assert.deepEqual(processListCommand('win32'), { cmd: 'tasklist', args: ['/FO', 'CSV', '/NH'] });
+  assert.deepEqual(processListCommand('darwin'), { cmd: 'ps', args: ['-axo', 'comm'] });
+  assert.deepEqual(processListCommand('linux'), { cmd: 'ps', args: ['-axo', 'comm'] });
+});
+
+test('ProcessProbe: Windows 上调用 tasklist 并能匹配 tasklist 的 CSV 输出', async () => {
+  const calls: string[] = [];
+  const csv = '"Code.exe","1234","Console","1","120,000 K"\n"explorer.exe","9","Console","1","8 K"\n';
+  const probe = new ProcessProbe(
+    ['Code'],
+    10,
+    (cmd, _a, _o, cb) => {
+      calls.push(cmd);
+      cb(null, csv);
+    },
+    'win32'
+  );
+
+  try {
+    probe.start();
+    await new Promise((r) => setTimeout(r, 50));
+  } finally {
+    probe.stop();
+  }
+
+  assert.equal(calls[0], 'tasklist');
+  assert.equal(probe.isActive(), true);
 });

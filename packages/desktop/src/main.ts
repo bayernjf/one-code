@@ -18,9 +18,9 @@ import { ensureToken } from './companion/token';
 import { Aggregator } from './aggregator';
 import {
   ShellHookManager,
-  SHELL_KINDS,
   hookSourceFor,
   rcPathFor,
+  shellsForPlatform,
 } from './shellHook/manager';
 
 let tray: Tray | undefined;
@@ -160,7 +160,7 @@ function rebuildTrayMenu(config: DesktopConfig): void {
     {
       label: '终端 Shell Hook',
       type: 'submenu',
-      submenu: SHELL_KINDS.map((kind) => {
+      submenu: shellsForPlatform(process.platform).map((kind) => {
         const rcPath = rcPathFor(kind, os.homedir());
         const installed = shellHookManager.installed(rcPath);
         return {
