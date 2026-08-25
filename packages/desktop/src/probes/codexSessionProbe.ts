@@ -249,7 +249,8 @@ export class CodexSessionProbe implements Probe {
     }
   }
 
+  /** rollout 的 task_started/task_complete 是宿主告知的确定性生命周期，属 session 级 */
   private fire(event: MonitorEvent): void {
-    this.emitter.emit('event', event);
+    this.emitter.emit('event', { ...event, authority: 'session' });
   }
 }

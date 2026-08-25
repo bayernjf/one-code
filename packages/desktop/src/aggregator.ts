@@ -6,6 +6,9 @@ import { AIStatus, MonitorEvent, MonitorSource, computeNextStatus } from '@ai-wa
  *
  * 订阅多个探针的事件，用 core 的状态机转移规则驱动全局状态，
  * 并对 done/waiting 做防抖合并，避免多探针同时触发造成重复通知。
+ *
+ * 另有一条仲裁规则：session 级探针（见 `SignalAuthority`）工作期间，
+ * heuristic 探针的 done 被丢弃。
  */
 export class Aggregator {
   private status: AIStatus = AIStatus.Idle;
@@ -15,6 +18,9 @@ export class Aggregator {
   private lastDoneAt = 0;
   private lastWaitingAt = 0;
   private static readonly DEBOUNCE_MS = 1500;
+
+  /** 正在工作的 session 级探针（其 done 才是权威的） */
+  private activeSessions = new Set<MonitorSource>();
 
   get currentStatus(): AIStatus {
     return this.status;
@@ -29,6 +35,20 @@ export class Aggregator {
   }
 
   handleEvent(event: MonitorEvent): void {
+    const isSession = event.authority === 'session';
+
+    if (isSession) {
+      if (event.type === 'activity') {
+        this.activeSessions.add(event.source);
+      } else {
+        this.activeSessions.delete(event.source);
+      }
+    } else if (event.type === 'done' && this.activeSessions.size > 0) {
+      // 会话探针明确还在工作：静默超时之类的推断性 done 是误报，丢掉。
+      // 否则它会抢先把状态推到 Done，让随后真正的 task_complete 无处可去。
+      return;
+    }
+
     const next = computeNextStatus(this.status, event.type);
     if (next === null) {
       return;

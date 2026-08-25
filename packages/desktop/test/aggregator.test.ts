@@ -68,3 +68,67 @@ test('Aggregator: 非法转移不改变状态', () => {
   agg.handleEvent({ source: MonitorSource.FileWatcher, type: 'done' });
   assert.equal(agg.currentStatus, AIStatus.Idle);
 });
+
+test('Aggregator: session 探针工作时，heuristic 的 done 被丢弃', () => {
+  const agg = new Aggregator();
+  const notifies: string[] = [];
+  agg.onNotify((n) => notifies.push(`${n.type}:${n.source}`));
+
+  agg.handleEvent({ source: MonitorSource.Codex, type: 'activity', authority: 'session' });
+  agg.handleEvent({ source: MonitorSource.FileWatcher, type: 'activity' });
+  // Codex 转入长时间推理，文件探针静默超时误报 done
+  agg.handleEvent({ source: MonitorSource.FileWatcher, type: 'done' });
+
+  assert.equal(agg.currentStatus, AIStatus.Working, '不应被推断性 done 提前推到 done');
+  assert.deepEqual(notifies, [], '不应发出假通知');
+
+  // Codex 真正完成
+  agg.handleEvent({ source: MonitorSource.Codex, type: 'done', authority: 'session' });
+  assert.equal(agg.currentStatus, AIStatus.Done);
+  assert.deepEqual(notifies, [`done:${MonitorSource.Codex}`], '真通知必须送达');
+});
+
+test('Aggregator: session 探针结束后，heuristic 的 done 恢复生效', () => {
+  const agg = new Aggregator();
+  agg.handleEvent({ source: MonitorSource.Codex, type: 'activity', authority: 'session' });
+  agg.handleEvent({ source: MonitorSource.Codex, type: 'done', authority: 'session' });
+  agg.acknowledge();
+
+  agg.handleEvent({ source: MonitorSource.FileWatcher, type: 'activity' });
+  agg.handleEvent({ source: MonitorSource.FileWatcher, type: 'done' });
+  assert.equal(agg.currentStatus, AIStatus.Done);
+});
+
+test('Aggregator: session 探针中断（idle）也解除压制', () => {
+  const agg = new Aggregator();
+  agg.handleEvent({ source: MonitorSource.Codex, type: 'activity', authority: 'session' });
+  agg.handleEvent({ source: MonitorSource.Codex, type: 'idle', authority: 'session' });
+
+  agg.handleEvent({ source: MonitorSource.FileWatcher, type: 'activity' });
+  agg.handleEvent({ source: MonitorSource.FileWatcher, type: 'done' });
+  assert.equal(agg.currentStatus, AIStatus.Done, 'session 探针已退出，不应再压制');
+});
+
+test('Aggregator: 多个 session 探针需全部结束才解除压制', () => {
+  const agg = new Aggregator();
+  agg.handleEvent({ source: MonitorSource.Codex, type: 'activity', authority: 'session' });
+  agg.handleEvent({ source: MonitorSource.ShellHook, type: 'activity', authority: 'session' });
+  agg.handleEvent({ source: MonitorSource.Codex, type: 'done', authority: 'session' });
+  agg.acknowledge();
+
+  agg.handleEvent({ source: MonitorSource.FileWatcher, type: 'activity' });
+  agg.handleEvent({ source: MonitorSource.FileWatcher, type: 'done' });
+  assert.equal(agg.currentStatus, AIStatus.Working, 'Shell Hook 仍在跑，仍应压制');
+});
+
+test('Aggregator: heuristic 的 waiting 不受压制（可能是另一个助手在等你）', () => {
+  const agg = new Aggregator();
+  const notifies: string[] = [];
+  agg.onNotify((n) => notifies.push(n.type));
+
+  agg.handleEvent({ source: MonitorSource.Codex, type: 'activity', authority: 'session' });
+  agg.handleEvent({ source: MonitorSource.Claude, type: 'waiting' });
+
+  assert.equal(agg.currentStatus, AIStatus.Waiting);
+  assert.deepEqual(notifies, ['waiting']);
+});
