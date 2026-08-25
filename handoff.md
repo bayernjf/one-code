@@ -36,8 +36,9 @@ VS Code 插件，监控 AI 编码工具（Copilot Chat、Cline/Roo Code、终端
 │       │   ├── transitions.ts# 状态机转移 computeNextStatus
 │       │   ├── format.ts     # formatDuration 时长格式化
 │       │   ├── paths.ts      # shouldIgnorePath 路径过滤
-│       │   └── editWindow.ts # RapidEditDetector 滑动窗口检测
-│       └── test/core.test.ts # 10 条单测
+│       │   ├── editWindow.ts # RapidEditDetector 滑动窗口检测
+│       │   └── companion.ts  # 伴侣 socket 协议：帧类型 + parseCompanionLine + socket/token 路径
+│       └── test/             # core.test.ts / companion.test.ts（20 用例）
 ├── packages/
 │   └── desktop/              # @ai-watchdog/desktop：Electron 桌面应用（统一监控产品）
 │       ├── package.json
@@ -48,21 +49,32 @@ VS Code 插件，监控 AI 编码工具（Copilot Chat、Cline/Roo Code、终端
 │           ├── configStore.ts # 配置持久化（JSON 存 userData）
 │           ├── workspaceDiscovery.ts # 工作区目录自动发现
 │           ├── aggregator.ts # 状态聚合引擎（复用 core 状态机 + 防抖）
+│           ├── updater.ts    # electron-updater 自动更新（事件流 + IPC）
 │           ├── settingsWindow.ts # 设置窗口（BrowserWindow + IPC）
 │           ├── preload.ts    # contextBridge 暴露 settingsAPI
 │           ├── renderer/
-│           │   ├── settings.html # 设置页 UI（勾选目标 + 灵敏度）
+│           │   ├── settings.html # 设置页 UI（勾选目标 + 灵敏度 + 深度信号 + 更新）
 │           │   └── settings.ts   # 渲染进程逻辑（ESM）
 │           ├── scripts/gen-tray-icon.js # 托盘图标生成脚本（纯 Node，无依赖）
 │           ├── resources/tray/ # 托盘图标 PNG（16/32 @2x，产品 logo）
-│           ├── test/            # 单测：aggregator / fileProbe / processProbe（11 用例）
+│           ├── test/            # 单测：aggregator / 各探针 / shellHook / companionServer（24 用例）
+│           ├── shellHook/
+│           │   ├── zsh.ts        # zsh precmd/preexec 片段与状态文件格式
+│           │   └── manager.ts    # ~/.zshrc 片段幂等写入/移除
+│           ├── companion/
+│           │   ├── server.ts     # 伴侣 socket 服务端（Probe 实现，token 鉴权 + JSON lines）
+│           │   └── token.ts      # 鉴权 token 生成/读取（0600）
 │           └── probes/
 │               ├── probe.ts      # 探针接口（宿主无关）
 │               ├── fileProbe.ts  # 文件探针（chokidar + RapidEditDetector）
-│               └── processProbe.ts # 进程探针（ps 轮询，弱信号）
+│               ├── processProbe.ts # 进程探针（ps 轮询，弱信号）
+│               ├── shellHookProbe.ts # Shell Hook 状态文件探针（强信号）
+│               └── claudeSessionProbe.ts # Claude 会话 jsonl 追加检测
 └── src/                      # VS Code 扩展（依赖 @ai-watchdog/core）
     ├── extension.ts          # 入口：初始化所有模块、注册命令、连接事件
     ├── config.ts             # 读取 aiWatchdog.* 配置项
+    ├── companion/
+    │   └── client.ts         # 伴侣客户端：深度信号上报 + 退避重连 + 心跳
     ├── monitors/
     │   ├── types.ts          # 薄层：re-export core 类型 + IMonitor 接口
     │   ├── fileWatcher.ts    # 核心：文件变更频率滑动窗口检测
@@ -120,6 +132,7 @@ waiting → idle（用户确认）
 - [x] 纯逻辑解耦：提取 `monitors/editWindow.ts`、`util/paths.ts`、`state/transitions.ts`、`util/format.ts`（不依赖 vscode，可单测）
 - [x] core 包抽取（阶段 1a）：`packages/core`（`@ai-watchdog/core`），纯逻辑 + 类型迁入；npm workspaces 打通扩展侧引用；单测迁至 `packages/core/test`
 - [x] 桌面应用骨架（阶段 1b 初版）：`packages/desktop`（`@ai-watchdog/desktop`），Electron 主进程 + 托盘 + 聚合引擎 + 文件探针（chokidar + RapidEditDetector）+ 进程探针（ps 轮询）；可编译运行
+- [x] 阶段 4a：VS Code 扩展伴侣模式 —— 深度信号经本地 Unix domain socket（token 鉴权）上报守护进程，判断/防抖/通知仍留在守护进程侧；守护进程未运行时静默退避重连，浅层监控不受影响
 
 ## 待完成
 
@@ -127,9 +140,11 @@ waiting → idle（用户确认）
 
 - [x] 阶段 1a：core 抽取（纯逻辑解耦为 `@ai-watchdog/core`）
 - [✅] 阶段 1b：Electron 壳 + 托盘 + 设置窗口 + 文件探针 + 进程探针（骨架、目录自动发现、配置持久化、托盘图标、设置窗口 UI、探针/聚合引擎单测均已完成；ad-hoc 签名解决 Gatekeeper 拦截；electron-builder 打包 mac dmg/zip 已验证通过；release 工作流 + electron-updater 自动更新（含完整事件流 + IPC + 设置页更新 UI，对齐 soft-desk）已就绪）
-- [ ] 阶段 2：Shell Hook（zsh）精确终端监控
-- [ ] 阶段 3：Claude Desktop 专用探针（`~/.claude/projects/*.jsonl`）
-- [ ] 阶段 4（可选）：VS Code 扩展改造为"深度模式伴侣"；ChatGPT 浏览器扩展
+- [x] 阶段 2：Shell Hook（zsh）精确终端监控（ShellHookProbe + 托盘一键安装/卸载 ~/.zshrc 片段 + 单测）
+- [x] 阶段 3：Claude Desktop 专用探针（`~/.claude/projects/*.jsonl` 追加检测 + 单测）
+- [x] 阶段 4a：守护进程 socket + VS Code 伴侣（core 协议层 + Desktop CompanionServer + 扩展 CompanionClient + 设置页开关 + 端到端验证）
+- [—] 阶段 4b：ChatGPT 浏览器扩展 —— **已搁置**（需额外本地 HTTP 转发端点，DOM 易碎，且定位为弱信号，投入产出比低）
+- [ ] 阶段 4a 端到端灰度：真实 VS Code + 打包后守护进程联调，观察重复通知是否需调防抖窗口
 
 ### 必要项（发布前）
 
@@ -157,13 +172,12 @@ npm install                           # 安装依赖 + 建立 workspace 软链
 npm run build                         # 生产构建 → dist/extension.js
 npm run watch                         # 开发监听模式
 npm run lint                          # ESLint 检查（src/）
-npm run test:unit                     # 扩展侧单测（node:test + tsx）
-npm test --workspace @ai-watchdog/core # core 包单测
+npm test --workspace @ai-watchdog/core # core 包单测（含伴侣协议）
 npm run typecheck --workspace @ai-watchdog/core # core 包类型检查
 npx tsc --noEmit                      # 扩展侧类型检查
 npm run build --workspace @ai-watchdog/desktop # 桌面应用构建（tsc → dist/）
 npm run start --workspace @ai-watchdog/desktop # 启动桌面应用（托盘）
-npm test --workspace @ai-watchdog/desktop # 桌面应用单测（探针 + 聚合引擎）
+npm test --workspace @ai-watchdog/desktop # 桌面应用单测（探针 + 聚合引擎 + 伴侣 socket）
 npm run dist:mac --workspace @ai-watchdog/desktop # 打包 macOS 安装包（dmg/zip → release/）
 npm run dist:win --workspace @ai-watchdog/desktop # 打包 Windows 安装包（NSIS exe → release/）
 # F5                                  # 在 VS Code 中启动扩展开发宿主调试
@@ -177,11 +191,14 @@ npm run dist:win --workspace @ai-watchdog/desktop # 打包 Windows 安装包（N
 4. **桌面通知仅失焦时**：`vscode.window.state.focused` 为 true 时不发桌面通知，避免打扰
 5. **done 状态 30 秒自动回 idle**：避免状态栏长期停留在"已完成"
 6. **纯逻辑与宿主解耦**：状态机/滑动窗口/路径过滤/时长格式化迁入 `@ai-watchdog/core`，不依赖 vscode，可被独立监控应用（Electron）复用
+7. **伴侣只上报不判断**：扩展经 socket 上报深度信号，状态判断/防抖/通知全留在守护进程；信号分级放在信号源侧，聚合引擎不为弱信号引入新仲裁机制
+8. **伴侣鉴权用 token 文件**：`~/.ai-watchdog/companion-token`（0600）+ Unix domain socket（0600），避免端口冲突与防火墙提示；守护进程未运行时伴侣静默退避重连，不打扰用户
 
 ## 已知限制
 
 - Copilot Chat 无公开 API 直接读取对话状态，只能通过 document version 间接推断
 - Cline/Roo 的 webview 内容不可直接访问，依赖文件系统变更间接检测
-- 终端 proposed API 需要 `--enable-proposed-api` 启动参数，正式发布版不可用
-- 当前形态是 VS Code 扩展，无法监控非 fork 独立产品（Claude Desktop / ChatGPT）；需升级为独立应用（见 `design.md`）
-- 遗留孤儿文件待清理：`src/state/transitions.ts`、`src/util/format.ts`、`src/util/paths.ts`、`src/monitors/editWindow.ts`、`src/test/unit.test.ts`（已迁入 core，不再被引用）
+- 终端 proposed API 需要 `--enable-proposed-api` 启动参数，正式发布版不可用 → 伴侣模式下该深度信号同样受限
+- VS Code 扩展形态本身无法监控非 fork 独立产品（Claude Desktop / ChatGPT），这部分由桌面守护进程覆盖（见 `design.md`）
+- 伴侣 socket 的 0600 权限只能挡住其他用户，同用户进程仍可读 token 文件伪造信号——本机同用户信任模型下可接受
+- 伴侣的 Windows 命名管道路径已实现但未实测（当前 macOS 优先）

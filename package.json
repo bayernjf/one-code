@@ -138,6 +138,16 @@
           "type": "boolean",
           "default": true,
           "description": "启用终端输出监控"
+        },
+        "aiWatchdog.companion.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "启用伴侣模式：把宿主内部深度信号上报给 AI Watchdog 桌面守护进程（守护进程未运行时静默降级）"
+        },
+        "aiWatchdog.companion.socketPath": {
+          "type": "string",
+          "default": "",
+          "description": "守护进程伴侣 socket 路径，留空使用默认值（~/.ai-watchdog/companion.sock）"
         }
       }
     }
@@ -148,7 +158,6 @@
     "watch": "node esbuild.js --watch",
     "lint": "eslint src --ext ts",
     "test": "node ./out/test/runTest.js",
-    "test:unit": "node --import tsx --test src/test/unit.test.ts",
     "package": "vsce package"
   },
   "devDependencies": {
