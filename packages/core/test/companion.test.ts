@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import path from 'node:path';
 import {
   parseCompanionLine,
   serializeEventFrame,
@@ -92,5 +93,8 @@ test('companion 路径：非 Windows 落在 ~/.ai-watchdog 下', () => {
   } else {
     assert.equal(companionSocketPath('/home/u'), '/home/u/.ai-watchdog/companion.sock');
   }
-  assert.equal(companionTokenPath('/home/u'), '/home/u/.ai-watchdog/companion-token');
+  assert.equal(
+    companionTokenPath('/home/u'),
+    path.join('/home/u', '.ai-watchdog', 'companion-token')
+  );
 });
