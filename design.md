@@ -51,18 +51,19 @@
 | Claude（桌面版） | ① 会话文件探针：`~/.claude/projects/*.jsonl` 有追加 = 正在生成 ② 窗口标题探针 | jsonl 静默超时 = 完成；出现提问 = 等待 | 中高 |
 | Claude Code / 终端 AI CLI | ① Shell Hook（`precmd/preexec` 写状态文件） ② 进程树探针（claude/codex/aider 等进程及 CPU/IO） | 命令开始 = working，命令结束 = done | 高（hook 是精确信号） |
 | 终端（通用） | Shell Hook + 终端 App 进程监控 | 同上 | 中高 |
-| ChatGPT（网页/桌面） | ① 浏览器扩展读 DOM（后期可选） ② 窗口标题探针 | 弱信号 | 低（建议后期） |
+| ChatGPT 桌面端 / Codex（✅ 已实现） | 会话探针：`~/.codex/sessions/**/rollout-*.jsonl` 的 `task_started` / `task_complete` / `turn_aborted` 事件 | 显式生命周期事件，无需静默超时；不产出 waiting | 高（官方数据文件 + 精确事件） |
+| ChatGPT 网页版 | 浏览器扩展读 DOM | 弱信号 | 低（阶段 4b，已搁置） |
 
 ### 信号分级原则（关键设计约束）
 
-- **强信号**：文件变更、Shell Hook、官方数据文件（如 Claude jsonl）→ 可独立触发状态转移
+- **强信号**：文件变更、Shell Hook、官方数据文件（Claude jsonl、Codex rollout）→ 可独立触发状态转移
 - **弱信号**：窗口标题、进程 CPU、剪贴板 → 仅做辅助仲裁，**不单独触发通知**
 
 ## 5. 设置页设计
 
 ```
 监控目标
-☑ VS Code        ☑ Cursor        ☑ Claude        ☐ ChatGPT        ☑ 终端
+☑ VS Code    ☑ Cursor    ☑ Claude    ☑ ChatGPT / Codex    ☑ 终端
 
 每个目标展开后：
 - 监听目录（默认：~/Projects 或自动发现最近活跃工作区）
@@ -108,6 +109,7 @@
 | **1b. 桌面骨架（✅ 已完成）** | `packages/desktop`：Electron 主进程 + 托盘 + 聚合引擎 + 设置窗口；文件探针（chokidar + RapidEditDetector）+ 进程探针 + 目录自动发现 + 配置持久化 + 产品 logo 托盘图标 | 可编译运行，完整设置 UI；待：端到端联调 |
 | **2. Shell Hook** | zsh 集成（precmd/preexec 写状态文件，守护进程消费） | 终端监控从"不可用"变"精确" |
 | **3. Claude Desktop** | `~/.claude/projects/*.jsonl` 追加检测探针 | Claude 勾选项完整可用 |
+| **3a. Codex 会话探针（✅ 已完成）** | `~/.codex/sessions/**/rollout-*.jsonl` 生命周期事件探针 | ChatGPT 桌面端 / VS Code openai.chatgpt 扩展 / codex CLI 一并精确覆盖 |
 | **4. 伴侣与扩展（可选）** | 4a（✅ 已完成）：VS Code 扩展新增伴侣模式，经本地 socket 上报深度信号；4b：ChatGPT 浏览器扩展 | 深度信号 + 网页版覆盖（详见 §11） |
 
 ## 8. 取舍说明
@@ -205,7 +207,10 @@ one-code/
   - 状态栏可见状态（如 Copilot 状态栏文字）
 - **信号分级**：以上多为**弱信号/辅助**，仅"扩展活跃 + 明确生成中"可作为强信号（遵循 §4 信号分级原则）。
 
-### 11.5 ChatGPT 浏览器扩展
+### 11.5 ChatGPT 浏览器扩展（已搁置，且已被 Codex 会话探针取代）
+
+> ChatGPT **桌面端**已由 Codex 会话探针精确覆盖（见 §4 与 §7 阶段 3a），不再需要浏览器扩展。
+> 本节只对 ChatGPT **网页版** 仍有意义，投入产出比低，保留作为记录。
 
 - **形态**：Chrome/Edge MV3 扩展。
 - **检测点（DOM）**：
@@ -220,7 +225,7 @@ one-code/
 1. ✅ `core`：新增 `MonitorSource.VSCodeCompanion`；协议解析与路径解析放在 `companion.ts`（两侧共用同一份校验）。`chatgpt-web` 留到 4b。
 2. ✅ `desktop`：`CompanionServer` 实现 `Probe` 接口，监听 Unix domain socket（0600）+ token 鉴权 + JSON lines 解析 → 喂 `Aggregator`；token 由 `~/.ai-watchdog/companion-token`（0600）承载，首次启动自动生成。
 3. ✅ `src/` 扩展：`CompanionClient` 上报深度信号，指数退避重连（1s→30s）+ 30s 心跳，守护进程未运行时静默降级；浅层功能不变。
-4. ⬜ 浏览器扩展：DOM 检测 + socket 上报（阶段 4b）。
+4. [—] 浏览器扩展：DOM 检测 + socket 上报（阶段 4b）—— **已搁置**；桌面端已由 Codex 会话探针覆盖，仅网页版仍未覆盖。
 5. ✅ 设置页：新增「深度信号 · VS Code 伴侣」开关。
 6. ⬜ 端到端灰度（真实 VS Code + 打包后守护进程）。
 
@@ -228,9 +233,10 @@ one-code/
 
 ### 11.7 风险与开放问题
 
-- 浏览器扩展访问 localhost socket 的权限 / CORS 限制（可能需要本地转发 agent）。
+- 浏览器扩展访问 localhost socket 的权限 / CORS 限制（可能需要本地转发 agent）—— 随 4b 搁置。
 - socket 安全：本机其他进程可能伪造信号 → 必须做 token 鉴权。
-- ChatGPT DOM 结构易碎，需灰度验证；定位为弱信号，坏了不影响主流程。
+- Codex rollout 格式非官方承诺，解析全部宽松容错；事件类型若改名则探针静默失效（不误报，只是不再产出信号）。
+- Codex rollout 不落盘「等待用户批准」事件，因此该探针只产出 working / done / idle，拿不到 waiting。
 - `onDidWriteTerminalData` 发布版不可用 → VS Code 伴侣的深度价值受限，主信号仍靠浅层 + 守护进程探针。
 - 扩展改造需保持浅层功能完全兼容，避免回归。
 
@@ -238,4 +244,5 @@ one-code/
 
 - 2026-08-24：新增 §11 阶段 4 详细设计（伴侣与扩展）；更新 §10 开放问题。
 - 2026-08-24：阶段 4a 落地（守护进程伴侣 socket + VS Code 伴侣模式），§11.3/§11.6 更新为实际实现，§10 勾掉 socket 鉴权。
+- 2026-08-25：Codex 会话探针落地。查明 ChatGPT 桌面端会 fork `ChatGPT.app/Contents/Resources/codex app-server` 子进程写 `~/.codex/sessions/**/rollout-*.jsonl`（`session_meta.originator = "Codex Desktop"`），且 rollout 带显式 `task_started` / `task_complete` 生命周期事件（2026-08 全量 2230 / 2224 近乎配对）。§4 中 ChatGPT 由「弱信号、低优先级」改为强信号已实现；§7 新增 3a；阶段 4b 浏览器扩展被此方案取代。
 

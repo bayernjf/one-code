@@ -57,7 +57,7 @@ VS Code 插件，监控 AI 编码工具（Copilot Chat、Cline/Roo Code、终端
 │           │   └── settings.ts   # 渲染进程逻辑（ESM）
 │           ├── scripts/gen-tray-icon.js # 托盘图标生成脚本（纯 Node，无依赖）
 │           ├── resources/tray/ # 托盘图标 PNG（16/32 @2x，产品 logo）
-│           ├── test/            # 单测：aggregator / 各探针 / shellHook / companionServer（24 用例）
+│           ├── test/            # 单测：aggregator / 各探针 / shellHook / companionServer / codexSessionProbe（48 用例）
 │           ├── shellHook/
 │           │   ├── zsh.ts        # zsh precmd/preexec 片段与状态文件格式
 │           │   └── manager.ts    # ~/.zshrc 片段幂等写入/移除
@@ -69,7 +69,8 @@ VS Code 插件，监控 AI 编码工具（Copilot Chat、Cline/Roo Code、终端
 │               ├── fileProbe.ts  # 文件探针（chokidar + RapidEditDetector）
 │               ├── processProbe.ts # 进程探针（ps 轮询，弱信号）
 │               ├── shellHookProbe.ts # Shell Hook 状态文件探针（强信号）
-│               └── claudeSessionProbe.ts # Claude 会话 jsonl 追加检测
+│               ├── claudeSessionProbe.ts # Claude 会话 jsonl 追加检测
+│               └── codexSessionProbe.ts # Codex rollout 生命周期事件探针（ChatGPT 桌面端 / VS Code 扩展 / CLI）
 └── src/                      # VS Code 扩展（依赖 @ai-watchdog/core）
     ├── extension.ts          # 入口：初始化所有模块、注册命令、连接事件
     ├── config.ts             # 读取 aiWatchdog.* 配置项
@@ -142,9 +143,12 @@ waiting → idle（用户确认）
 - [✅] 阶段 1b：Electron 壳 + 托盘 + 设置窗口 + 文件探针 + 进程探针（骨架、目录自动发现、配置持久化、托盘图标、设置窗口 UI、探针/聚合引擎单测均已完成；ad-hoc 签名解决 Gatekeeper 拦截；electron-builder 打包 mac dmg/zip 已验证通过；release 工作流 + electron-updater 自动更新（含完整事件流 + IPC + 设置页更新 UI，对齐 soft-desk）已就绪）
 - [x] 阶段 2：Shell Hook（zsh）精确终端监控（ShellHookProbe + 托盘一键安装/卸载 ~/.zshrc 片段 + 单测）
 - [x] 阶段 3：Claude Desktop 专用探针（`~/.claude/projects/*.jsonl` 追加检测 + 单测）
+- [x] 阶段 3a：Codex 会话探针（`~/.codex/sessions/**/rollout-*.jsonl` 生命周期事件 + 单测）—— 一个探针同时覆盖 ChatGPT 桌面端、VS Code openai.chatgpt 扩展、codex CLI
 - [x] 阶段 4a：守护进程 socket + VS Code 伴侣（core 协议层 + Desktop CompanionServer + 扩展 CompanionClient + 设置页开关 + 端到端验证）
-- [—] 阶段 4b：ChatGPT 浏览器扩展 —— **已搁置**（需额外本地 HTTP 转发端点，DOM 易碎，且定位为弱信号，投入产出比低）
+- [—] 阶段 4b：ChatGPT 浏览器扩展 —— **已搁置**，且桌面端已被阶段 3a 的 Codex 探针取代；仅 ChatGPT 网页版仍未覆盖
 - [ ] 阶段 4a 端到端灰度：真实 VS Code + 打包后守护进程联调，观察重复通知是否需调防抖窗口
+- [ ] 阶段 3a 端到端灰度：真实 ChatGPT 桌面端跑一轮任务，确认 activity/done 时序符合预期
+- [ ] 清理根目录 `npm test`：脚本指向已删除的 `out/test/runTest.js`（既存问题，CI 未跑到）
 
 ### 必要项（发布前）
 
@@ -193,6 +197,7 @@ npm run dist:win --workspace @ai-watchdog/desktop # 打包 Windows 安装包（N
 6. **纯逻辑与宿主解耦**：状态机/滑动窗口/路径过滤/时长格式化迁入 `@ai-watchdog/core`，不依赖 vscode，可被独立监控应用（Electron）复用
 7. **伴侣只上报不判断**：扩展经 socket 上报深度信号，状态判断/防抖/通知全留在守护进程；信号分级放在信号源侧，聚合引擎不为弱信号引入新仲裁机制
 8. **伴侣鉴权用 token 文件**：`~/.ai-watchdog/companion-token`（0600）+ Unix domain socket（0600），避免端口冲突与防火墙提示；守护进程未运行时伴侣静默退避重连，不打扰用户
+9. **Codex 状态取显式事件而非静默超时**：rollout 里有 `task_started` / `task_complete` / `turn_aborted`，比 Claude 探针的「追加停止 + 防抖」精确；并发 turn 用 Map 计数，全部结束才报 done，另设 30 分钟兜底清理，避免宿主崩溃后永久卡在 working
 
 ## 已知限制
 
@@ -200,5 +205,7 @@ npm run dist:win --workspace @ai-watchdog/desktop # 打包 Windows 安装包（N
 - Cline/Roo 的 webview 内容不可直接访问，依赖文件系统变更间接检测
 - 终端 proposed API 需要 `--enable-proposed-api` 启动参数，正式发布版不可用 → 伴侣模式下该深度信号同样受限
 - VS Code 扩展形态本身无法监控非 fork 独立产品（Claude Desktop / ChatGPT），这部分由桌面守护进程覆盖（见 `design.md`）
+- Codex 探针拿不到 waiting：rollout 不落盘「等待用户批准」事件，只能给 working / done / idle
+- Codex rollout 格式非官方承诺；事件类型若改名，探针会静默失效（不误报）
 - 伴侣 socket 的 0600 权限只能挡住其他用户，同用户进程仍可读 token 文件伪造信号——本机同用户信任模型下可接受
 - 伴侣的 Windows 命名管道路径已实现但未实测（当前 macOS 优先）
