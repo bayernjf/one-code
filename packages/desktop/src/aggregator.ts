@@ -11,6 +11,20 @@ import { AIStatus, MonitorEvent, MonitorSource, computeNextStatus } from '@ai-wa
  * heuristic 探针的 done 被丢弃。
  */
 export class Aggregator {
+  /**
+   * 短于此时长的任务不发完成通知（状态照常流转）。
+   *
+   * 真实 Codex rollout 回放显示大量 turn 在 4~15 秒内完成，一个会话文件能产生
+   * 50 次 task_complete。这么短你还没离开屏幕，通知纯属噪音；通知的价值只在
+   * 「你已经走开了」的场景。
+   */
+  private minWorkDurationMs = 30_000;
+
+  /** 设置最短工作时长门槛（秒）；0 表示不设门槛。配置变更时可随时调整 */
+  setMinWorkDuration(seconds: number): void {
+    this.minWorkDurationMs = Math.max(0, seconds) * 1000;
+  }
+
   private status: AIStatus = AIStatus.Idle;
   private workingSince: Date | undefined;
   private emitter = new EventEmitter();
@@ -54,6 +68,8 @@ export class Aggregator {
       return;
     }
 
+    const workedMs = this.workingSince ? Date.now() - this.workingSince.getTime() : undefined;
+
     this.status = next;
     if (event.type === 'activity') {
       this.workingSince = new Date();
@@ -67,6 +83,10 @@ export class Aggregator {
     if (event.type === 'done') {
       const now = Date.now();
       if (now - this.lastDoneAt < Aggregator.DEBOUNCE_MS) {
+        return;
+      }
+      // workingSince 为空说明没观察到起点（探针刚重启等），时长未知则照常通知
+      if (workedMs !== undefined && workedMs < this.minWorkDurationMs) {
         return;
       }
       this.lastDoneAt = now;

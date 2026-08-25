@@ -55,6 +55,8 @@ export interface DesktopConfig {
   windowSize: number;
   activityThreshold: number;
   silenceTimeout: number;
+  /** 短于此时长的任务不发完成通知（秒）；0 表示不设门槛 */
+  minWorkDuration: number;
   /** Shell Hook 精确终端信号 */
   shellHook: ShellHookConfig;
   /** Claude 会话 jsonl 探针 */
@@ -123,6 +125,7 @@ export function getDefaultConfig(): DesktopConfig {
     windowSize: 3,
     activityThreshold: 3,
     silenceTimeout: 8,
+    minWorkDuration: 30,
     shellHook: {
       enabled: true,
       stateFile: shellHookStateFile(),

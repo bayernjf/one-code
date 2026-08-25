@@ -211,12 +211,14 @@ app.whenReady().then(() => {
 
   configStore = new ConfigStore();
   const config = configStore.load();
+  aggregator.setMinWorkDuration(config.minWorkDuration);
   fillWatchDirs(config);
 
   restartProbes(config);
 
   // 设置窗口：保存配置后重启探针
   settingsWindow = new SettingsWindow(configStore, (savedConfig) => {
+    aggregator.setMinWorkDuration(savedConfig.minWorkDuration);
     fillWatchDirs(savedConfig);
     restartProbes(savedConfig);
     rebuildTrayMenu(savedConfig);
