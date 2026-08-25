@@ -141,6 +141,29 @@ test('ClaudeSessionProbe: 新会话 add -> activity，静默超时 -> done', asy
   }
 });
 
+test('ClaudeSessionProbe: 启动前已存在的会话不重放历史，仅报 activity', async () => {
+  const dir = tmpProjectsDir();
+  // 历史里埋一条提问：若被重放会误判 waiting
+  const file = writeSession(dir, 's3', assistantLine('Should I proceed?') + '\n');
+  const probe = new ClaudeSessionProbe(dir, 1);
+  const events: Array<{ type: string; message?: string }> = [];
+  probe.onEvent((e) => events.push(e));
+
+  try {
+    probe.start();
+    await sleep(200);
+
+    fs.appendFileSync(file, assistantLine('Still working') + '\n');
+    await waitFor(() => probe.isActive(), 3000, 'activity on first change');
+
+    assert.equal(events.some((e) => e.type === 'waiting'), false);
+    assert.equal(events.filter((e) => e.type === 'activity').length, 1);
+  } finally {
+    probe.stop();
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('ClaudeSessionProbe: 追加 assistant 提问 -> waiting', async () => {
   const dir = tmpProjectsDir();
   const probe = new ClaudeSessionProbe(dir, 1);

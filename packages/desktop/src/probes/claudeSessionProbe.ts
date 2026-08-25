@@ -164,6 +164,14 @@ export class ClaudeSessionProbe implements Probe {
     if (!this.isSessionFile(filePath)) {
       return;
     }
+    if (!this.offsets.has(filePath)) {
+      // 探针启动前就存在的会话文件：历史可能有数 MB，全量读会同步阻塞，
+      // 且历史里的旧提问会被误判成当前 waiting。跳到末尾不解析，
+      // 但「文件正在追加」本身足以说明在生成，仍按 activity 计。
+      this.seekToEnd(filePath);
+      this.beginWorking(`Claude 正在生成: ${path.basename(filePath)}`);
+      return;
+    }
     const delta = this.readDelta(filePath);
     if (delta === null) {
       return;
@@ -194,6 +202,15 @@ export class ClaudeSessionProbe implements Probe {
     this.resetSilenceTimer();
     if (first) {
       this.fire({ source: this.source, type: 'activity', message });
+    }
+  }
+
+  /** 把偏移置到当前文件末尾（读取失败则置 0，下次按全量兜底） */
+  private seekToEnd(filePath: string): void {
+    try {
+      this.offsets.set(filePath, fs.statSync(filePath).size);
+    } catch {
+      this.offsets.set(filePath, 0);
     }
   }
 
