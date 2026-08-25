@@ -157,7 +157,7 @@
     "build": "node esbuild.js --production",
     "watch": "node esbuild.js --watch",
     "lint": "eslint src --ext ts",
-    "test": "node ./out/test/runTest.js",
+    "test": "npm run build --workspace @ai-watchdog/core && npm test --workspaces",
     "package": "vsce package"
   },
   "devDependencies": {

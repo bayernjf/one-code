@@ -148,7 +148,6 @@ waiting → idle（用户确认）
 - [—] 阶段 4b：ChatGPT 浏览器扩展 —— **已搁置**，且桌面端已被阶段 3a 的 Codex 探针取代；仅 ChatGPT 网页版仍未覆盖
 - [ ] 阶段 4a 端到端灰度：真实 VS Code + 打包后守护进程联调，观察重复通知是否需调防抖窗口
 - [ ] 阶段 3a 端到端灰度：真实 ChatGPT 桌面端跑一轮任务，确认 activity/done 时序符合预期
-- [ ] 清理根目录 `npm test`：脚本指向已删除的 `out/test/runTest.js`（既存问题，CI 未跑到）
 
 ### 必要项（发布前）
 
@@ -173,6 +172,7 @@ waiting → idle（用户确认）
 
 ```bash
 npm install                           # 安装依赖 + 建立 workspace 软链
+npm test                              # 全量单测（构建 core 后跑所有 workspace）
 npm run build                         # 生产构建 → dist/extension.js
 npm run watch                         # 开发监听模式
 npm run lint                          # ESLint 检查（src/）
