@@ -108,7 +108,7 @@
 | **1b. 桌面骨架（✅ 已完成）** | `packages/desktop`：Electron 主进程 + 托盘 + 聚合引擎 + 设置窗口；文件探针（chokidar + RapidEditDetector）+ 进程探针 + 目录自动发现 + 配置持久化 + 产品 logo 托盘图标 | 可编译运行，完整设置 UI；待：端到端联调 |
 | **2. Shell Hook** | zsh 集成（precmd/preexec 写状态文件，守护进程消费） | 终端监控从"不可用"变"精确" |
 | **3. Claude Desktop** | `~/.claude/projects/*.jsonl` 追加检测探针 | Claude 勾选项完整可用 |
-| **4. 伴侣与扩展（可选）** | 现有 VS Code 扩展改造为"深度模式伴侣"（本地 socket 上报信号）；ChatGPT 浏览器扩展 | 深度信号 + 网页版覆盖（详见 §11） |
+| **4. 伴侣与扩展（可选）** | 4a（✅ 已完成）：VS Code 扩展新增伴侣模式，经本地 socket 上报深度信号；4b：ChatGPT 浏览器扩展 | 深度信号 + 网页版覆盖（详见 §11） |
 
 ## 8. 取舍说明
 
@@ -140,8 +140,8 @@ one-code/
 - [ ] Claude jsonl 解析的健壮性（格式未官方承诺，阶段 3 已实现，待端到端灰度验证）
 - [ ] Windows / Linux 支持优先级（当前先 macOS）
 - [ ] 独立 App 的自动更新方案
-- [ ] 阶段 4：浏览器扩展访问 localhost socket 的权限 / CORS 限制
-- [ ] 阶段 4：socket 鉴权（防本机其他进程伪造信号）
+- [ ] 阶段 4b：浏览器扩展访问 localhost socket 的权限 / CORS 限制
+- [x] 阶段 4a：socket 鉴权 —— 已用 token 文件（`~/.ai-watchdog/companion-token`，0600）+ Unix domain socket（0600）+ `timingSafeEqual` 比对解决
 
 ## 11. 阶段 4 详细设计：伴侣与扩展（可选）
 
@@ -183,15 +183,16 @@ one-code/
 ### 11.3 本地 socket 协议
 
 - **传输**：localhost TCP 或 Unix domain socket，守护进程监听固定端口/路径。
-- **鉴权**：共享 token（环境变量注入或首次配对写入），防止本机其他进程伪造信号。
+  已落地选择：**Unix domain socket** `~/.ai-watchdog/companion.sock`（文件权限 0600；Windows 为命名管道 `\\.\pipe\ai-watchdog-companion`），避免端口冲突与防火墙提示。
+- **鉴权**：共享 token。已落地：守护进程首次启动生成 32 字节随机 token 写入 `~/.ai-watchdog/companion-token`（0600），同机同用户的伴侣直接读取，无需配对 UI；比对用 `timingSafeEqual`。连接后第一行必须是 auth 帧，否则立即断开。
 - **消息格式**（JSON lines，复用 `MonitorEvent` 语义）：
   ```json
-  {"source":"vscode-ext","type":"activity","message":"copilot streaming"}
-  {"source":"chatgpt-ext","type":"waiting","message":"awaiting input"}
-  {"source":"vscode-ext","type":"done","message":"copilot finished"}
+  {"kind":"auth","token":"<hex>"}
+  {"kind":"event","source":"vscode-companion","type":"activity","message":"copilot streaming"}
+  {"kind":"ping"}
   ```
-  `type ∈ activity | done | waiting | idle`，`source` 映射到 `MonitorSource` 新枚举（如 `vscode-companion`、`chatgpt-web`）。
-- **可靠性**：断线自动重连 + 心跳保活；守护进程未启动时伴侣静默降级（不打扰用户）。
+  `type ∈ activity | done | waiting | idle`；`source` 需在伴侣来源白名单内（当前仅 `vscode-companion`），否则该行被丢弃。
+- **可靠性**：断线指数退避重连（1s→30s）+ 30s 心跳保活；守护进程未启动时伴侣静默降级（不打扰用户）。单行上限 64KB，防畸形客户端撑爆缓冲区。
 
 ### 11.4 VS Code 扩展 → 深度模式伴侣
 
@@ -216,12 +217,14 @@ one-code/
 
 ### 11.6 落地步骤
 
-1. `core`：新增 `MonitorSource` 枚举（`vscode-companion` / `chatgpt-web`）。
-2. `desktop`：实现本地 socket 服务端（监听 + 鉴权 + 解析 JSON lines → 喂给 `Aggregator`）。
-3. `src/` 扩展：新增伴侣模式 + socket 客户端，保持浅层功能兼容。
-4. 浏览器扩展：DOM 检测 + socket 上报。
-5. 设置页：新增"深度信号"开关（VS Code 伴侣 / ChatGPT 网页）。
-6. 端到端验证 + 灰度。
+1. ✅ `core`：新增 `MonitorSource.VSCodeCompanion`；协议解析与路径解析放在 `companion.ts`（两侧共用同一份校验）。`chatgpt-web` 留到 4b。
+2. ✅ `desktop`：`CompanionServer` 实现 `Probe` 接口，监听 Unix domain socket（0600）+ token 鉴权 + JSON lines 解析 → 喂 `Aggregator`；token 由 `~/.ai-watchdog/companion-token`（0600）承载，首次启动自动生成。
+3. ✅ `src/` 扩展：`CompanionClient` 上报深度信号，指数退避重连（1s→30s）+ 30s 心跳，守护进程未运行时静默降级；浅层功能不变。
+4. ⬜ 浏览器扩展：DOM 检测 + socket 上报（阶段 4b）。
+5. ✅ 设置页：新增「深度信号 · VS Code 伴侣」开关。
+6. ⬜ 端到端灰度（真实 VS Code + 打包后守护进程）。
+
+**信号分级实现位置**：分级留在**信号源侧**——伴侣只上报自认为够强的信号，socket 之后按普通事件处理，聚合引擎不为弱信号引入新仲裁机制。
 
 ### 11.7 风险与开放问题
 
@@ -234,4 +237,5 @@ one-code/
 ## 12. 文档变更记录
 
 - 2026-08-24：新增 §11 阶段 4 详细设计（伴侣与扩展）；更新 §10 开放问题。
+- 2026-08-24：阶段 4a 落地（守护进程伴侣 socket + VS Code 伴侣模式），§11.3/§11.6 更新为实际实现，§10 勾掉 socket 鉴权。
 
