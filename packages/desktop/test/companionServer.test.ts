@@ -14,6 +14,17 @@ function makeTmpDir(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'aiwatchdog-companion-'));
 }
 
+let pipeSeq = 0;
+
+/** Windows 只能监听命名管道，不能监听文件系统路径 */
+function makeSocketPath(dir: string): string {
+  if (process.platform === 'win32') {
+    pipeSeq += 1;
+    return `\\\\.\\pipe\\aiwatchdog-test-${process.pid}-${pipeSeq}`;
+  }
+  return path.join(dir, 'companion.sock');
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
@@ -36,19 +47,36 @@ function connect(socketPath: string): Promise<net.Socket> {
   });
 }
 
+/** 命名管道没有文件可 stat，统一用「能连上」判断服务端就绪 */
+async function waitForListening(socketPath: string, timeoutMs: number): Promise<void> {
+  const start = Date.now();
+  for (;;) {
+    try {
+      const probe = await connect(socketPath);
+      probe.destroy();
+      return;
+    } catch {
+      if (Date.now() - start > timeoutMs) {
+        assert.fail('timeout waiting for server listening');
+      }
+      await sleep(25);
+    }
+  }
+}
+
 /** 起一个服务端并在回调结束后确保清理（否则事件循环挂起） */
 async function withServer(
   fn: (ctx: { socketPath: string; events: MonitorEvent[]; server: CompanionServer }) => Promise<void>
 ): Promise<void> {
   const dir = makeTmpDir();
-  const socketPath = path.join(dir, 'companion.sock');
+  const socketPath = makeSocketPath(dir);
   const server = new CompanionServer(socketPath, TOKEN);
   const events: MonitorEvent[] = [];
   server.onEvent((e) => events.push(e));
 
   try {
     server.start();
-    await waitFor(() => fs.existsSync(socketPath), 3000, 'socket file');
+    await waitForListening(socketPath, 3000);
     await fn({ socketPath, events, server });
   } finally {
     server.stop();
