@@ -158,7 +158,6 @@
     "watch": "node esbuild.js --watch",
     "lint": "eslint src --ext ts",
     "test": "node ./out/test/runTest.js",
-    "test:unit": "node --import tsx --test src/test/unit.test.ts",
     "package": "vsce package"
   },
   "devDependencies": {
