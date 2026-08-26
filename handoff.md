@@ -173,6 +173,9 @@ waiting → idle（用户确认）
 - [x] 统计仪表盘：基于活动历史数据展示今日/本周/累计时长、7 天趋势、工具分布（`statsWindow` + 托盘菜单入口）
 - [x] 托盘标题活跃数：多工具并发 working 时显示 `工作中 (N)`
 - [x] 历史窗口来源筛选：下拉框按监控来源过滤记录，选项动态生成
+- [x] 通知日志面板：记录实际弹出的系统通知（标题/正文/来源/时间），独立于活动历史
+- [x] 统计数据导出：支持 CSV / JSON 导出，保存对话框可选路径
+- [x] 亮色主题：所有窗口（设置/历史/统计/通知日志）跟随系统 `prefers-color-scheme` 自动切换
 
 ### 发布
 
@@ -228,3 +231,4 @@ npm run dist:win --workspace @ai-watchdog/desktop # 打包 Windows 安装包（N
 - 伴侣 socket 的 0600 权限只能挡住其他用户，同用户进程仍可读 token 文件伪造信号——本机同用户信任模型下可接受
 - 伴侣的 Windows 命名管道路径已实现但未实测（当前 macOS 优先）
 - fish hook 片段只做了静态生成，本机未装 fish，语法/行为用例在无 fish 环境下自动跳过
+- Windows 开机自启依赖 `app.setLoginItemSettings`（注册表启动项），需安装后生效；开发模式（npm start）下可能不生效
