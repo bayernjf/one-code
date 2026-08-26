@@ -169,6 +169,8 @@ waiting → idle（用户确认）
 - [x] "一键接管"：聚焦编辑器并定位到最近变更位置
 - [x] 单元测试（状态机、滑动窗口、文件过滤）
 - [x] 设置页暴露 `minWorkDuration`（灵敏度区域新增输入框，0 表示不设门槛）
+- [x] 多会话状态管理：aggregator 重构为按来源分组的状态机集合，托盘菜单展示活跃会话，无破坏性 API 变更（详见 [`docs/multi-session-design.md`](./docs/multi-session-design.md)）
+- [x] 统计仪表盘：基于活动历史数据展示今日/本周/累计时长、7 天趋势、工具分布（`statsWindow` + 托盘菜单入口）
 
 ### 发布
 
