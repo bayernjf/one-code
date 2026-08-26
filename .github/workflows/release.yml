@@ -42,6 +42,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
   resolve-version:
     name: Resolve version
@@ -86,6 +90,8 @@ jobs:
             GENERATE_NOTES=true
           elif [[ "${{ github.ref }}" == refs/heads/main ]]; then
             IS_MAIN=true
+            # 同步最新 main，避免并发 release 导致版本号冲突 / non-fast-forward
+            git pull origin main
             LATEST_TAG=$(git tag -l 'v*.*.*' --sort=-v:refname | head -n 1 || true)
             if [[ -z "$LATEST_TAG" ]]; then
               LATEST_TAG="v0.0.0"
