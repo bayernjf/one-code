@@ -32,6 +32,23 @@
     }
     header h1 { font-size: 15px; margin: 0; }
     header .count { color: var(--muted); font-size: 12px; }
+    .filter-bar {
+      padding: 8px 20px;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .filter-bar label { color: var(--muted); font-size: 12px; }
+    .filter-bar select {
+      background: var(--panel);
+      color: var(--text);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 8px;
+      font-size: 12px;
+      cursor: pointer;
+    }
     main { padding: 12px 20px; }
     .record {
       background: var(--panel);
@@ -91,6 +108,12 @@
     <h1>活动历史</h1>
     <span class="count" id="count">0 条记录</span>
   </header>
+  <div class="filter-bar">
+    <label for="source-filter">来源</label>
+    <select id="source-filter">
+      <option value="all">全部</option>
+    </select>
+  </div>
   <main id="list"></main>
   <footer>
     <button id="refresh">刷新</button>

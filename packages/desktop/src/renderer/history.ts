@@ -35,6 +35,9 @@ const listEl = document.getElementById('list')!;
 const countEl = document.getElementById('count')!;
 const refreshBtn = document.getElementById('refresh')!;
 const clearBtn = document.getElementById('clear')!;
+const sourceFilterEl = document.getElementById('source-filter') as HTMLSelectElement;
+
+let allRecords: ActivityRecord[] = [];
 
 function formatDuration(ms: number): string {
   const totalSec = Math.round(ms / 1000);
@@ -50,7 +53,22 @@ function formatTime(ts: number): string {
   return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 }
 
-function render(records: ActivityRecord[]): void {
+function populateSourceFilter(records: ActivityRecord[]): void {
+  const sources = Array.from(new Set(records.map((r) => r.source))).sort();
+  // 保留"全部"，重建其余选项
+  sourceFilterEl.innerHTML = '<option value="all">全部</option>';
+  for (const src of sources) {
+    const opt = document.createElement('option');
+    opt.value = src;
+    opt.textContent = SOURCE_NAMES[src] ?? src;
+    sourceFilterEl.appendChild(opt);
+  }
+}
+
+function render(): void {
+  const filter = sourceFilterEl.value;
+  const records = filter === 'all' ? allRecords : allRecords.filter((r) => r.source === filter);
+
   countEl.textContent = `${records.length} 条记录`;
 
   if (records.length === 0) {
@@ -90,11 +108,14 @@ function render(records: ActivityRecord[]): void {
 }
 
 async function load(): Promise<void> {
-  const records = await window.historyAPI.getRecords();
-  render(records);
+  allRecords = await window.historyAPI.getRecords();
+  populateSourceFilter(allRecords);
+  render();
 }
 
 refreshBtn.addEventListener('click', load);
+
+sourceFilterEl.addEventListener('change', render);
 
 clearBtn.addEventListener('click', async () => {
   if (!confirm('确定要清空所有活动历史吗？')) return;
