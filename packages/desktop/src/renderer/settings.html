@@ -123,6 +123,22 @@
     <section>
       <h2>监控目标</h2>
       <div id="targets"></div>
+      <div id="custom-form" style="margin-top:12px;display:none;">
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <input type="text" id="custom-name" placeholder="名称（如 Gemini CLI）" style="flex:1;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;" />
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <input type="text" id="custom-process" placeholder="进程名（可选，如 gemini）" style="flex:1;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;" />
+        </div>
+        <div style="display:flex;gap:8px;margin-bottom:8px;">
+          <input type="text" id="custom-dir" placeholder="工作区目录（可选，如 ~/Projects）" style="flex:1;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;" />
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button id="custom-add" class="secondary" style="flex:1;">添加</button>
+          <button id="custom-cancel" class="secondary">取消</button>
+        </div>
+      </div>
+      <button id="show-custom-form" class="secondary" style="margin-top:8px;width:100%;">+ 添加自定义目标</button>
     </section>
 
     <section>
@@ -156,6 +172,65 @@
         <div class="target-dirs" id="companionSocket"></div>
       </div>
       <div class="hint">开启后监听本地 socket，接收 VS Code 扩展上报的宿主内部信号（Copilot 活跃、终端写入等）。扩展需安装并启用伴侣模式。</div>
+    </section>
+
+    <section>
+      <h2>通用</h2>
+      <div class="form-row">
+        <label for="autoStart">开机自启</label>
+        <input type="checkbox" id="autoStart" style="width:16px;height:16px;accent-color:var(--accent);" />
+      </div>
+      <div class="form-row">
+        <label for="globalShortcut">全局快捷键</label>
+        <input type="text" id="globalShortcut" style="width:160px;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;" placeholder="如 Alt+Command+W" />
+      </div>
+      <div class="form-row">
+        <label for="notifyOnlyOnBlur">仅失焦时通知</label>
+        <input type="checkbox" id="notifyOnlyOnBlur" style="width:16px;height:16px;accent-color:var(--accent);" />
+      </div>
+      <div class="hint">按下快捷键显示当前 AI 状态。留空表示不注册。格式参考 Electron Accelerator（如 Alt+Command+W、Control+Shift+A）。开启「仅失焦时通知」后，AI 工具在前台时不弹通知。</div>
+    </section>
+
+    <section>
+      <h2>勿扰模式</h2>
+      <div class="form-row">
+        <label for="dndEnabled">手动开启勿扰</label>
+        <input type="checkbox" id="dndEnabled" style="width:16px;height:16px;accent-color:var(--accent);" />
+      </div>
+      <div class="form-row">
+        <label for="dndScheduleEnabled">定时时段</label>
+        <input type="checkbox" id="dndScheduleEnabled" style="width:16px;height:16px;accent-color:var(--accent);" />
+      </div>
+      <div class="form-row">
+        <label for="dndStart">开始时间</label>
+        <input type="text" id="dndStart" style="width:80px;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;" placeholder="22:00" />
+      </div>
+      <div class="form-row">
+        <label for="dndEnd">结束时间</label>
+        <input type="text" id="dndEnd" style="width:80px;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;" placeholder="08:00" />
+      </div>
+      <div class="form-row">
+        <label for="dndOnlyWaiting">勿扰时仍通知「等待输入」</label>
+        <input type="checkbox" id="dndOnlyWaiting" style="width:16px;height:16px;accent-color:var(--accent);" />
+      </div>
+      <div class="hint">勿扰期间完成通知静默。等待输入可能阻塞 AI，可选择仍通知。时段支持跨午夜（如 22:00-08:00）。</div>
+    </section>
+
+    <section>
+      <h2>远程通知</h2>
+      <div class="form-row" style="flex-direction:column;align-items:stretch;gap:6px;">
+        <label for="webhookUrl" style="color:var(--muted);">Webhook URL</label>
+        <input type="text" id="webhookUrl" style="width:100%;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;" placeholder="https://example.com/webhook" />
+      </div>
+      <div class="form-row" style="flex-direction:column;align-items:stretch;gap:6px;margin-top:10px;">
+        <label for="ntfyTopic" style="color:var(--muted);">ntfy Topic</label>
+        <input type="text" id="ntfyTopic" style="width:100%;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;" placeholder="my-secret-topic-123" />
+      </div>
+      <div class="form-row" style="flex-direction:column;align-items:stretch;gap:6px;margin-top:10px;">
+        <label for="ntfyServer" style="color:var(--muted);">ntfy 服务器</label>
+        <input type="text" id="ntfyServer" style="width:100%;background:var(--panel);border:1px solid var(--border);border-radius:6px;color:var(--text);padding:6px 8px;" placeholder="https://ntfy.sh" />
+      </div>
+      <div class="hint">配置后通知将同时推送到远程渠道。Webhook 接收 JSON POST；ntfy 需在手机装 app 并订阅同一 topic。留空禁用对应渠道。</div>
     </section>
 
     <section>

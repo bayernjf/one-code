@@ -90,19 +90,19 @@ export class Aggregator {
         return;
       }
       this.lastDoneAt = now;
-      this.emitter.emit('notify', { type: 'done' as const, source: event.source });
+      this.emitter.emit('notify', { type: 'done' as const, source: event.source, files: event.files });
     } else if (event.type === 'waiting') {
       const now = Date.now();
       if (now - this.lastWaitingAt < Aggregator.DEBOUNCE_MS) {
         return;
       }
       this.lastWaitingAt = now;
-      this.emitter.emit('notify', { type: 'waiting' as const, source: event.source });
+      this.emitter.emit('notify', { type: 'waiting' as const, source: event.source, files: event.files });
     }
   }
 
   /** 订阅通知事件（done/waiting 已防抖） */
-  onNotify(callback: (payload: { type: 'done' | 'waiting'; source: MonitorSource }) => void): void {
+  onNotify(callback: (payload: { type: 'done' | 'waiting'; source: MonitorSource; files?: string[] }) => void): void {
     this.emitter.on('notify', callback);
   }
 
