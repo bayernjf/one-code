@@ -1,5 +1,6 @@
-import { BrowserWindow, ipcMain } from 'electron';
+import { BrowserWindow, ipcMain, dialog } from 'electron';
 import path from 'node:path';
+import fs from 'node:fs';
 import { ActivityLog, ActivityRecord } from './activityLog';
 import { getSourceName } from '@ai-watchdog/core';
 
@@ -66,6 +67,39 @@ export class StatsWindow {
 
   private registerIpc(): void {
     ipcMain.handle('stats:get', () => this.computeStats());
+    ipcMain.handle('stats:exportCsv', async () => this.exportCsv());
+    ipcMain.handle('stats:exportJson', async () => this.exportJson());
+  }
+
+  private async exportCsv(): Promise<{ ok: boolean; path?: string }> {
+    const stats = this.computeStats();
+    const lines = ['date,duration_ms,count'];
+    for (const d of stats.last7Days) {
+      lines.push(`${d.date},${d.durationMs},${d.count}`);
+    }
+    lines.push('');
+    lines.push('source,name,duration_ms,count');
+    for (const s of stats.bySource) {
+      lines.push(`${s.source},"${s.name}",${s.durationMs},${s.count}`);
+    }
+    return this.saveFile('ai-watchdog-stats.csv', lines.join('\n'));
+  }
+
+  private async exportJson(): Promise<{ ok: boolean; path?: string }> {
+    const stats = this.computeStats();
+    return this.saveFile('ai-watchdog-stats.json', JSON.stringify(stats, null, 2));
+  }
+
+  private async saveFile(defaultName: string, content: string): Promise<{ ok: boolean; path?: string }> {
+    const result = await dialog.showSaveDialog(this.win!, {
+      defaultPath: defaultName,
+      filters: [{ name: defaultName.endsWith('.csv') ? 'CSV' : 'JSON', extensions: [defaultName.endsWith('.csv') ? 'csv' : 'json'] }],
+    });
+    if (result.canceled || !result.filePath) {
+      return { ok: false };
+    }
+    fs.writeFileSync(result.filePath, content, 'utf-8');
+    return { ok: true, path: result.filePath };
   }
 
   private computeStats(): StatsData {

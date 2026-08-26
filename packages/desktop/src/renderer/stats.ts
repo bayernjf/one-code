@@ -30,6 +30,8 @@ declare global {
   interface Window {
     statsAPI: {
       getStats: () => Promise<StatsData>;
+      exportCsv: () => Promise<{ ok: boolean; path?: string }>;
+      exportJson: () => Promise<{ ok: boolean; path?: string }>;
     };
   }
 }
@@ -37,6 +39,8 @@ declare global {
 const contentEl = document.getElementById('content')!;
 const rangeEl = document.getElementById('range')!;
 const refreshBtn = document.getElementById('refresh')!;
+const exportCsvBtn = document.getElementById('export-csv')!;
+const exportJsonBtn = document.getElementById('export-json')!;
 
 function formatDuration(ms: number): string {
   const totalMin = Math.round(ms / 60000);
@@ -113,6 +117,17 @@ async function load(): Promise<void> {
 }
 
 refreshBtn.addEventListener('click', load);
+exportCsvBtn.addEventListener('click', async () => {
+  const r = await window.statsAPI.exportCsv();
+  if (r.ok && r.path) exportCsvBtn.textContent = '已导出';
+  setTimeout(() => (exportCsvBtn.textContent = '导出 CSV'), 1500);
+});
+exportJsonBtn.addEventListener('click', async () => {
+  const r = await window.statsAPI.exportJson();
+  if (r.ok && r.path) exportJsonBtn.textContent = '已导出';
+  setTimeout(() => (exportJsonBtn.textContent = '导出 JSON'), 1500);
+});
+
 load();
 
 export {};

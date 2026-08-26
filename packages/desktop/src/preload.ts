@@ -3,6 +3,7 @@ import { DesktopConfig } from './config';
 import type { UpdaterCheckResult, UpdaterStatus } from './updater';
 import type { ActivityRecord } from './activityLog';
 import type { StatsData } from './statsWindow';
+import type { NotificationRecord } from './notificationLog';
 
 /**
  * 预加载脚本：通过 contextBridge 暴露最小化的 IPC 接口给渲染进程
@@ -24,4 +25,11 @@ contextBridge.exposeInMainWorld('historyAPI', {
 
 contextBridge.exposeInMainWorld('statsAPI', {
   getStats: (): Promise<StatsData> => ipcRenderer.invoke('stats:get'),
+  exportCsv: (): Promise<{ ok: boolean; path?: string }> => ipcRenderer.invoke('stats:exportCsv'),
+  exportJson: (): Promise<{ ok: boolean; path?: string }> => ipcRenderer.invoke('stats:exportJson'),
+});
+
+contextBridge.exposeInMainWorld('notificationAPI', {
+  getRecords: (): Promise<NotificationRecord[]> => ipcRenderer.invoke('notifications:get'),
+  clear: (): Promise<boolean> => ipcRenderer.invoke('notifications:clear'),
 });

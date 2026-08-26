@@ -5,7 +5,7 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
-const files = ['settings.html', 'history.html', 'stats.html'];
+const files = ['settings.html', 'history.html', 'stats.html', 'notifications.html'];
 const srcDir = path.join(__dirname, '..', 'src', 'renderer');
 const distDir = path.join(__dirname, '..', 'dist', 'renderer');
 

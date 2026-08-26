@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'unsafe-inline'" />
-  <title>AI Watchdog — 活动历史</title>
+  <title>AI Watchdog — 通知日志</title>
   <style>
     :root {
       --bg: #1e1e1e;
@@ -41,23 +41,6 @@
     }
     header h1 { font-size: 15px; margin: 0; }
     header .count { color: var(--muted); font-size: 12px; }
-    .filter-bar {
-      padding: 8px 20px;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
-    .filter-bar label { color: var(--muted); font-size: 12px; }
-    .filter-bar select {
-      background: var(--panel);
-      color: var(--text);
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      padding: 4px 8px;
-      font-size: 12px;
-      cursor: pointer;
-    }
     main { padding: 12px 20px; }
     .record {
       background: var(--panel);
@@ -65,9 +48,12 @@
       border-radius: 8px;
       padding: 10px 14px;
       margin-bottom: 8px;
+    }
+    .record .head {
       display: flex;
       align-items: center;
-      gap: 12px;
+      gap: 8px;
+      margin-bottom: 4px;
     }
     .badge {
       font-size: 11px;
@@ -78,10 +64,9 @@
     }
     .badge.done { background: rgba(34, 197, 94, 0.15); color: var(--done); }
     .badge.waiting { background: rgba(245, 158, 11, 0.15); color: var(--waiting); }
-    .meta { flex: 1; min-width: 0; }
-    .meta .source { font-weight: 600; }
-    .meta .time { color: var(--muted); font-size: 11px; margin-top: 2px; }
-    .duration { color: var(--muted); font-size: 12px; white-space: nowrap; }
+    .record .title { font-weight: 600; flex: 1; }
+    .record .time { color: var(--muted); font-size: 11px; }
+    .record .body { color: var(--muted); font-size: 12px; margin-top: 2px; }
     .empty {
       text-align: center;
       color: var(--muted);
@@ -101,12 +86,11 @@
     button {
       padding: 6px 14px;
       border-radius: 6px;
-      border: none;
-      cursor: pointer;
-      font-size: 13px;
+      border: 1px solid var(--border);
       background: var(--panel);
       color: var(--text);
-      border: 1px solid var(--border);
+      cursor: pointer;
+      font-size: 13px;
     }
     button.danger { color: #ef4444; }
     button:hover { border-color: var(--accent); }
@@ -114,20 +98,14 @@
 </head>
 <body>
   <header>
-    <h1>活动历史</h1>
-    <span class="count" id="count">0 条记录</span>
+    <h1>通知日志</h1>
+    <span class="count" id="count">0 条</span>
   </header>
-  <div class="filter-bar">
-    <label for="source-filter">来源</label>
-    <select id="source-filter">
-      <option value="all">全部</option>
-    </select>
-  </div>
   <main id="list"></main>
   <footer>
     <button id="refresh">刷新</button>
-    <button id="clear" class="danger">清空历史</button>
+    <button id="clear" class="danger">清空</button>
   </footer>
-  <script type="module" src="./history.js"></script>
+  <script type="module" src="./notifications.js"></script>
 </body>
 </html>
