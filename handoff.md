@@ -171,6 +171,8 @@ waiting → idle（用户确认）
 - [x] 设置页暴露 `minWorkDuration`（灵敏度区域新增输入框，0 表示不设门槛）
 - [x] 多会话状态管理：aggregator 重构为按来源分组的状态机集合，托盘菜单展示活跃会话，无破坏性 API 变更（详见 [`docs/multi-session-design.md`](./docs/multi-session-design.md)）
 - [x] 统计仪表盘：基于活动历史数据展示今日/本周/累计时长、7 天趋势、工具分布（`statsWindow` + 托盘菜单入口）
+- [x] 托盘标题活跃数：多工具并发 working 时显示 `工作中 (N)`
+- [x] 历史窗口来源筛选：下拉框按监控来源过滤记录，选项动态生成
 
 ### 发布
 
