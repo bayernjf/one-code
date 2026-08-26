@@ -169,12 +169,18 @@ function updateTray(status: AIStatus): void {
   if (!tray) {
     return;
   }
-  const label = {
+  let label = {
     [AIStatus.Idle]: '● 空闲',
     [AIStatus.Working]: '◐ 工作中',
     [AIStatus.Done]: '✓ 已完成',
     [AIStatus.Waiting]: '? 等待输入',
   }[status];
+  if (status === AIStatus.Working) {
+    const workingCount = aggregator.getActiveSessions().filter((s) => s.status === AIStatus.Working).length;
+    if (workingCount > 1) {
+      label += ` (${workingCount})`;
+    }
+  }
   tray.setTitle(` AI Watchdog · ${label}`);
   tray.setToolTip(`AI Watchdog — ${label}`);
 }
