@@ -142,6 +142,8 @@ waiting → idle（用户确认）
 
 ## 待完成
 
+> 完整的功能迭代规划（P0~P3 共 10 项）见 [`roadmap.md`](./roadmap.md)。本节仅列当前直接跟踪的待办项。
+
 ### 统一监控产品（下一阶段，见 `design.md`）
 
 - [x] 阶段 1a：core 抽取（纯逻辑解耦为 `@ai-watchdog/core`）
