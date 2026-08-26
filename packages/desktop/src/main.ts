@@ -8,6 +8,7 @@ import { ConfigStore } from './configStore';
 import { discoverWorkspaces } from './workspaceDiscovery';
 import { SettingsWindow } from './settingsWindow';
 import { HistoryWindow } from './historyWindow';
+import { StatsWindow } from './statsWindow';
 import { ActivityLog } from './activityLog';
 import { focusAppForSource, getAppNameForSource } from './focusApp';
 import { sendWebhook } from './notifiers/webhook';
@@ -35,6 +36,7 @@ let configStore: ConfigStore;
 let activityLog: ActivityLog;
 let settingsWindow: SettingsWindow;
 let historyWindow: HistoryWindow;
+let statsWindow: StatsWindow;
 let probes: Probe[] = [];
 let shellHookManager = new ShellHookManager();
 /** 当前注册的全局快捷键（用于配置变更时重新注册） */
@@ -177,6 +179,24 @@ function updateTray(status: AIStatus): void {
   tray.setToolTip(`AI Watchdog — ${label}`);
 }
 
+/** 构建活跃会话子菜单项 */
+function buildActiveSessionItems(): Electron.MenuItemConstructorOptions[] {
+  const sessions = aggregator.getActiveSessions();
+  if (sessions.length === 0) {
+    return [{ label: '无活跃会话', enabled: false }];
+  }
+  const statusLabel: Record<AIStatus, string> = {
+    [AIStatus.Working]: '工作中',
+    [AIStatus.Done]: '已完成',
+    [AIStatus.Waiting]: '等待输入',
+    [AIStatus.Idle]: '空闲',
+  };
+  return sessions.map((s) => ({
+    label: `${getSourceName(s.source)} · ${statusLabel[s.status]} · ${formatDuration(s.durationMs)}`,
+    click: () => focusAppForSource(s.source),
+  }));
+}
+
 function rebuildTrayMenu(config: DesktopConfig): void {
   if (!tray) {
     return;
@@ -218,6 +238,11 @@ function rebuildTrayMenu(config: DesktopConfig): void {
     },
     { type: 'separator' },
     {
+      label: '活跃会话',
+      submenu: buildActiveSessionItems(),
+    },
+    { type: 'separator' },
+    {
       label: '勿扰模式',
       type: 'checkbox',
       checked: config.dnd.enabled,
@@ -231,6 +256,10 @@ function rebuildTrayMenu(config: DesktopConfig): void {
     {
       label: '活动历史',
       click: () => historyWindow.open(),
+    },
+    {
+      label: '统计',
+      click: () => statsWindow.open(),
     },
     {
       label: '打开设置',
@@ -365,8 +394,12 @@ app.whenReady().then(() => {
   });
 
   historyWindow = new HistoryWindow(activityLog);
+  statsWindow = new StatsWindow(activityLog);
 
-  aggregator.onStatusChange((status) => updateTray(status));
+  aggregator.onStatusChange((status) => {
+    updateTray(status);
+    rebuildTrayMenu(currentConfig);
+  });
   aggregator.onNotify(async (payload) => {
     // 勿扰模式检查
     if (isDndActive()) {
