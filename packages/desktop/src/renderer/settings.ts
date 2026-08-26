@@ -19,6 +19,7 @@ interface DesktopConfig {
   windowSize: number;
   activityThreshold: number;
   silenceTimeout: number;
+  minWorkDuration: number;
   companion: { enabled: boolean; socketPath: string };
 }
 
@@ -49,6 +50,7 @@ const targetsEl = document.getElementById('targets')!;
 const windowSizeEl = document.getElementById('windowSize') as HTMLInputElement;
 const activityThresholdEl = document.getElementById('activityThreshold') as HTMLInputElement;
 const silenceTimeoutEl = document.getElementById('silenceTimeout') as HTMLInputElement;
+const minWorkDurationEl = document.getElementById('minWorkDuration') as HTMLInputElement;
 const saveBtn = document.getElementById('save') as HTMLButtonElement;
 const resetBtn = document.getElementById('reset') as HTMLButtonElement;
 const companionEnabledEl = document.getElementById('companionEnabled') as HTMLInputElement;
@@ -93,6 +95,7 @@ function renderSensitivity(): void {
   windowSizeEl.value = String(config.windowSize);
   activityThresholdEl.value = String(config.activityThreshold);
   silenceTimeoutEl.value = String(config.silenceTimeout);
+  minWorkDurationEl.value = String(config.minWorkDuration);
 }
 
 function renderCompanion(): void {
@@ -106,6 +109,7 @@ function collect(): DesktopConfig {
     windowSize: Number(windowSizeEl.value),
     activityThreshold: Number(activityThresholdEl.value),
     silenceTimeout: Number(silenceTimeoutEl.value),
+    minWorkDuration: Number(minWorkDurationEl.value),
     companion: { ...config.companion, enabled: companionEnabledEl.checked },
   };
 }

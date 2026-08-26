@@ -139,7 +139,11 @@
         <label for="silenceTimeout">静默超时（秒）</label>
         <input type="number" id="silenceTimeout" min="3" max="60" />
       </div>
-      <div class="hint">窗口内文件变更达到阈值判定为「工作中」，静默超过超时判定为「完成」。</div>
+      <div class="form-row">
+        <label for="minWorkDuration">最短工作时长（秒）</label>
+        <input type="number" id="minWorkDuration" min="0" max="600" />
+      </div>
+      <div class="hint">窗口内文件变更达到阈值判定为「工作中」，静默超过超时判定为「完成」。短于最短工作时长的任务只改状态不发通知，设为 0 表示不设门槛。</div>
     </section>
 
     <section>
