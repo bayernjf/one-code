@@ -5,7 +5,7 @@
   "author": "AI Watchdog",
   "main": "dist/main.js",
   "scripts": {
-    "build": "tsc -p tsconfig.json && tsc -p tsconfig.renderer.json && cp src/renderer/settings.html dist/renderer/settings.html",
+    "build": "tsc -p tsconfig.json && tsc -p tsconfig.renderer.json && cp src/renderer/settings.html dist/renderer/settings.html && cp src/renderer/history.html dist/renderer/history.html",
     "start": "npm run build && electron .",
     "dev": "tsc -p tsconfig.json && electron .",
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.renderer.json --noEmit",

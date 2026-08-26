@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { DesktopConfig } from './config';
 import type { UpdaterCheckResult, UpdaterStatus } from './updater';
+import type { ActivityRecord } from './activityLog';
 
 /**
  * 预加载脚本：通过 contextBridge 暴露最小化的 IPC 接口给渲染进程
@@ -13,4 +14,9 @@ contextBridge.exposeInMainWorld('settingsAPI', {
   checkForUpdates: (): Promise<UpdaterCheckResult> => ipcRenderer.invoke('updater:check'),
   getUpdaterStatus: (): Promise<UpdaterStatus> => ipcRenderer.invoke('updater:getStatus'),
   quitAndInstall: (): Promise<{ ok: boolean; reason?: string }> => ipcRenderer.invoke('updater:quitAndInstall'),
+});
+
+contextBridge.exposeInMainWorld('historyAPI', {
+  getRecords: (): Promise<ActivityRecord[]> => ipcRenderer.invoke('history:get'),
+  clear: (): Promise<boolean> => ipcRenderer.invoke('history:clear'),
 });
