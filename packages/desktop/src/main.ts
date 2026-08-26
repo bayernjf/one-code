@@ -9,6 +9,8 @@ import { discoverWorkspaces } from './workspaceDiscovery';
 import { SettingsWindow } from './settingsWindow';
 import { HistoryWindow } from './historyWindow';
 import { StatsWindow } from './statsWindow';
+import { NotificationLog } from './notificationLog';
+import { NotificationWindow } from './notificationWindow';
 import { ActivityLog } from './activityLog';
 import { focusAppForSource, getAppNameForSource } from './focusApp';
 import { sendWebhook } from './notifiers/webhook';
@@ -37,6 +39,8 @@ let activityLog: ActivityLog;
 let settingsWindow: SettingsWindow;
 let historyWindow: HistoryWindow;
 let statsWindow: StatsWindow;
+let notificationLog: NotificationLog;
+let notificationWindow: NotificationWindow;
 let probes: Probe[] = [];
 let shellHookManager = new ShellHookManager();
 /** 当前注册的全局快捷键（用于配置变更时重新注册） */
@@ -153,6 +157,8 @@ function showNotification(payload: { type: 'done' | 'waiting'; source: MonitorSo
   }
   const body = parts.join(' · ');
 
+  notificationLog.record(payload.type, payload.source, title, body);
+
   console.log(`[notify] ${payload.type} (source: ${payload.source})`);
   // 不同状态用不同系统声音（macOS）；Windows/Linux 忽略 sound 选项回退默认
   const sound = payload.type === 'done' ? 'Glass' : 'Hero';
@@ -262,6 +268,10 @@ function rebuildTrayMenu(config: DesktopConfig): void {
     {
       label: '活动历史',
       click: () => historyWindow.open(),
+    },
+    {
+      label: '通知日志',
+      click: () => notificationWindow.open(),
     },
     {
       label: '统计',
@@ -401,6 +411,8 @@ app.whenReady().then(() => {
 
   historyWindow = new HistoryWindow(activityLog);
   statsWindow = new StatsWindow(activityLog);
+  notificationLog = new NotificationLog();
+  notificationWindow = new NotificationWindow(notificationLog);
 
   aggregator.onStatusChange((status) => {
     updateTray(status);
