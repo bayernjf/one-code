@@ -142,6 +142,8 @@ waiting → idle（用户确认）
 
 ## 待完成
 
+> 完整的功能迭代规划（P0~P3 共 10 项）见 [`roadmap.md`](./roadmap.md)。本节仅列当前直接跟踪的待办项。
+
 ### 统一监控产品（下一阶段，见 `design.md`）
 
 - [x] 阶段 1a：core 抽取（纯逻辑解耦为 `@ai-watchdog/core`）
@@ -166,7 +168,11 @@ waiting → idle（用户确认）
 - [x] 多根工作区 fileWatcher 优化（VS Code 的 `createFileSystemWatcher('**/...')` 原生覆盖所有 workspace folder，已满足）
 - [x] "一键接管"：聚焦编辑器并定位到最近变更位置
 - [x] 单元测试（状态机、滑动窗口、文件过滤）
-- [ ] 设置页暴露 `minWorkDuration`（目前只能手改配置 JSON）
+- [x] 设置页暴露 `minWorkDuration`（灵敏度区域新增输入框，0 表示不设门槛）
+- [x] 多会话状态管理：aggregator 重构为按来源分组的状态机集合，托盘菜单展示活跃会话，无破坏性 API 变更（详见 [`docs/multi-session-design.md`](./docs/multi-session-design.md)）
+- [x] 统计仪表盘：基于活动历史数据展示今日/本周/累计时长、7 天趋势、工具分布（`statsWindow` + 托盘菜单入口）
+- [x] 托盘标题活跃数：多工具并发 working 时显示 `工作中 (N)`
+- [x] 历史窗口来源筛选：下拉框按监控来源过滤记录，选项动态生成
 
 ### 发布
 
@@ -216,7 +222,7 @@ npm run dist:win --workspace @ai-watchdog/desktop # 打包 Windows 安装包（N
 - 终端 proposed API 需要 `--enable-proposed-api` 启动参数，正式发布版不可用 → 伴侣模式下该深度信号同样受限
 - VS Code 扩展形态本身无法监控非 fork 独立产品（Claude Desktop / ChatGPT），这部分由桌面守护进程覆盖（见 `design.md`）
 - Codex 探针拿不到 waiting：rollout 不落盘「等待用户批准」事件，只能给 working / done / idle。2026-08-26 已取证结案（307 个 rollout 里审批事件 0 次，请求走私有 IPC socket），不是待办
-- 完成通知有最短工作时长门槛（默认 30s），短任务只改状态不通知；`waiting` 不受门槛限制。该项已持久化并在启动/保存时生效，但设置页尚未提供入口，改值需手改 userData 下的配置 JSON
+- 完成通知有最短工作时长门槛（默认 30s），短任务只改状态不通知；`waiting` 不受门槛限制。该项已持久化，设置页「灵敏度」区域可直接调整（0 表示不设门槛）
 - Windows 版进程探针用 `tasklist`，但整体未在真实 Windows 上跑过；zsh / fish hook 在 Windows 不提供（只留 bash，需 Git Bash 或 WSL）
 - Codex rollout 格式非官方承诺；事件类型若改名，探针会静默失效（不误报）
 - 伴侣 socket 的 0600 权限只能挡住其他用户，同用户进程仍可读 token 文件伪造信号——本机同用户信任模型下可接受

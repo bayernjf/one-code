@@ -2,55 +2,86 @@ import { EventEmitter } from 'node:events';
 import { AIStatus, MonitorEvent, MonitorSource, computeNextStatus } from '@ai-watchdog/core';
 
 /**
+ * 单个信号来源的会话状态
+ */
+interface SessionState {
+  status: AIStatus;
+  workingSince: Date | undefined;
+  lastDoneAt: number;
+  lastWaitingAt: number;
+}
+
+/**
  * 状态聚合引擎（宿主无关）
  *
- * 订阅多个探针的事件，用 core 的状态机转移规则驱动全局状态，
- * 并对 done/waiting 做防抖合并，避免多探针同时触发造成重复通知。
+ * 每个 MonitorSource 维护独立状态机，全局状态由子状态聚合得出。
+ * done/waiting 按来源独立防抖、独立计算最短工作时长门槛。
  *
  * 另有一条仲裁规则：session 级探针（见 `SignalAuthority`）工作期间，
  * heuristic 探针的 done 被丢弃。
  */
 export class Aggregator {
-  /**
-   * 短于此时长的任务不发完成通知（状态照常流转）。
-   *
-   * 真实 Codex rollout 回放显示大量 turn 在 4~15 秒内完成，一个会话文件能产生
-   * 50 次 task_complete。这么短你还没离开屏幕，通知纯属噪音；通知的价值只在
-   * 「你已经走开了」的场景。
-   */
   private minWorkDurationMs = 30_000;
-
-  /** 设置最短工作时长门槛（秒）；0 表示不设门槛。配置变更时可随时调整 */
-  setMinWorkDuration(seconds: number): void {
-    this.minWorkDurationMs = Math.max(0, seconds) * 1000;
-  }
-
-  private status: AIStatus = AIStatus.Idle;
-  private workingSince: Date | undefined;
-  private emitter = new EventEmitter();
-
-  private lastDoneAt = 0;
-  private lastWaitingAt = 0;
   private static readonly DEBOUNCE_MS = 1500;
+
+  private sessions = new Map<MonitorSource, SessionState>();
+  private globalStatus: AIStatus = AIStatus.Idle;
+  private emitter = new EventEmitter();
 
   /** 正在工作的 session 级探针（其 done 才是权威的） */
   private activeSessions = new Set<MonitorSource>();
 
-  get currentStatus(): AIStatus {
-    return this.status;
+  /** 设置最短工作时长门槛（秒）；0 表示不设门槛 */
+  setMinWorkDuration(seconds: number): void {
+    this.minWorkDurationMs = Math.max(0, seconds) * 1000;
   }
 
+  get currentStatus(): AIStatus {
+    return this.globalStatus;
+  }
+
+  /** 所有 working session 中最长的时长（最老的 workingSince） */
   get workingDuration(): number {
-    return this.workingSince ? Date.now() - this.workingSince.getTime() : 0;
+    let oldest: Date | undefined;
+    for (const s of this.sessions.values()) {
+      if (s.status === AIStatus.Working && s.workingSince) {
+        if (!oldest || s.workingSince < oldest) {
+          oldest = s.workingSince;
+        }
+      }
+    }
+    return oldest ? Date.now() - oldest.getTime() : 0;
+  }
+
+  /** 获取所有非 idle 的会话（用于托盘展示） */
+  getActiveSessions(): Array<{ source: MonitorSource; status: AIStatus; durationMs: number }> {
+    const result: Array<{ source: MonitorSource; status: AIStatus; durationMs: number }> = [];
+    for (const [source, s] of this.sessions) {
+      if (s.status !== AIStatus.Idle) {
+        result.push({
+          source,
+          status: s.status,
+          durationMs: s.workingSince ? Date.now() - s.workingSince.getTime() : 0,
+        });
+      }
+    }
+    return result;
   }
 
   onStatusChange(callback: (status: AIStatus) => void): void {
     this.emitter.on('status', callback);
   }
 
+  onNotify(callback: (payload: { type: 'done' | 'waiting'; source: MonitorSource; files?: string[] }) => void): void {
+    this.emitter.on('notify', callback);
+  }
+
   handleEvent(event: MonitorEvent): void {
     const isSession = event.authority === 'session';
+    let suppressNotify = false;
 
+    // 信号权威性仲裁：heuristic 的 done 在 session 工作期间被压制（不通知），
+    // 但状态仍正常转移——文件探针确实静默了，只是不抢在 session 前面发通知。
     if (isSession) {
       if (event.type === 'activity') {
         this.activeSessions.add(event.source);
@@ -58,59 +89,107 @@ export class Aggregator {
         this.activeSessions.delete(event.source);
       }
     } else if (event.type === 'done' && this.activeSessions.size > 0) {
-      // 会话探针明确还在工作：静默超时之类的推断性 done 是误报，丢掉。
-      // 否则它会抢先把状态推到 Done，让随后真正的 task_complete 无处可去。
-      return;
+      suppressNotify = true;
     }
 
-    const next = computeNextStatus(this.status, event.type);
+    const session = this.getOrCreateSession(event.source);
+    const next = computeNextStatus(session.status, event.type);
     if (next === null) {
       return;
     }
 
-    const workedMs = this.workingSince ? Date.now() - this.workingSince.getTime() : undefined;
+    const workedMs = session.workingSince
+      ? Date.now() - session.workingSince.getTime()
+      : undefined;
 
-    this.status = next;
+    session.status = next;
     if (event.type === 'activity') {
-      this.workingSince = new Date();
+      session.workingSince = new Date();
     } else if (event.type === 'idle') {
-      this.workingSince = undefined;
+      session.workingSince = undefined;
     }
 
-    this.emitter.emit('status', this.status);
+    this.recomputeGlobalStatus();
 
-    // 防抖合并：done / waiting 只触发一次通知
+    if (suppressNotify) {
+      return;
+    }
+
+    // 按 session 独立防抖 + 最短工作时长门槛
     if (event.type === 'done') {
       const now = Date.now();
-      if (now - this.lastDoneAt < Aggregator.DEBOUNCE_MS) {
+      if (now - session.lastDoneAt < Aggregator.DEBOUNCE_MS) {
         return;
       }
-      // workingSince 为空说明没观察到起点（探针刚重启等），时长未知则照常通知
       if (workedMs !== undefined && workedMs < this.minWorkDurationMs) {
         return;
       }
-      this.lastDoneAt = now;
-      this.emitter.emit('notify', { type: 'done' as const, source: event.source });
+      session.lastDoneAt = now;
+      this.emitter.emit('notify', { type: 'done' as const, source: event.source, files: event.files });
     } else if (event.type === 'waiting') {
       const now = Date.now();
-      if (now - this.lastWaitingAt < Aggregator.DEBOUNCE_MS) {
+      if (now - session.lastWaitingAt < Aggregator.DEBOUNCE_MS) {
         return;
       }
-      this.lastWaitingAt = now;
-      this.emitter.emit('notify', { type: 'waiting' as const, source: event.source });
+      session.lastWaitingAt = now;
+      this.emitter.emit('notify', { type: 'waiting' as const, source: event.source, files: event.files });
     }
   }
 
-  /** 订阅通知事件（done/waiting 已防抖） */
-  onNotify(callback: (payload: { type: 'done' | 'waiting'; source: MonitorSource }) => void): void {
-    this.emitter.on('notify', callback);
+  /** 清除所有 done/waiting 状态的 session，回到 idle */
+  acknowledge(): void {
+    let changed = false;
+    for (const s of this.sessions.values()) {
+      if (s.status === AIStatus.Done || s.status === AIStatus.Waiting) {
+        s.status = AIStatus.Idle;
+        s.workingSince = undefined;
+        changed = true;
+      }
+    }
+    if (changed) {
+      this.recomputeGlobalStatus();
+    }
   }
 
-  acknowledge(): void {
-    if (this.status === AIStatus.Done || this.status === AIStatus.Waiting) {
-      this.status = AIStatus.Idle;
-      this.workingSince = undefined;
-      this.emitter.emit('status', this.status);
+  private getOrCreateSession(source: MonitorSource): SessionState {
+    let session = this.sessions.get(source);
+    if (!session) {
+      session = {
+        status: AIStatus.Idle,
+        workingSince: undefined,
+        lastDoneAt: 0,
+        lastWaitingAt: 0,
+      };
+      this.sessions.set(source, session);
+    }
+    return session;
+  }
+
+  /** 聚合所有 session 状态，若全局状态变化则 emit */
+  private recomputeGlobalStatus(): void {
+    const prev = this.globalStatus;
+    let hasWorking = false;
+    let hasWaiting = false;
+    let hasDone = false;
+
+    for (const s of this.sessions.values()) {
+      if (s.status === AIStatus.Working) hasWorking = true;
+      else if (s.status === AIStatus.Waiting) hasWaiting = true;
+      else if (s.status === AIStatus.Done) hasDone = true;
+    }
+
+    if (hasWaiting) {
+      this.globalStatus = AIStatus.Waiting;
+    } else if (hasWorking) {
+      this.globalStatus = AIStatus.Working;
+    } else if (hasDone) {
+      this.globalStatus = AIStatus.Done;
+    } else {
+      this.globalStatus = AIStatus.Idle;
+    }
+
+    if (this.globalStatus !== prev) {
+      this.emitter.emit('status', this.globalStatus);
     }
   }
 }

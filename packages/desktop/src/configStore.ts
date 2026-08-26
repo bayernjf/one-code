@@ -22,12 +22,19 @@ export class ConfigStore {
       const parsed = JSON.parse(raw) as Partial<DesktopConfig>;
       const defaults = getDefaultConfig();
       // 浅合并：缺失字段用默认值补齐
+      const mergedTargets = (parsed.targets ?? defaults.targets).map((t, i) => ({
+        ...defaults.targets[i],
+        ...t,
+      }));
       return {
-        targets: parsed.targets ?? defaults.targets,
+        targets: mergedTargets,
         windowSize: parsed.windowSize ?? defaults.windowSize,
         activityThreshold: parsed.activityThreshold ?? defaults.activityThreshold,
         silenceTimeout: parsed.silenceTimeout ?? defaults.silenceTimeout,
         minWorkDuration: parsed.minWorkDuration ?? defaults.minWorkDuration,
+        autoStart: parsed.autoStart ?? defaults.autoStart,
+        globalShortcut: parsed.globalShortcut ?? defaults.globalShortcut,
+        notifyOnlyOnBlur: parsed.notifyOnlyOnBlur ?? defaults.notifyOnlyOnBlur,
         shellHook: {
           ...defaults.shellHook,
           ...(parsed.shellHook ?? {}),
@@ -43,6 +50,14 @@ export class ConfigStore {
         companion: {
           ...defaults.companion,
           ...(parsed.companion ?? {}),
+        },
+        dnd: {
+          ...defaults.dnd,
+          ...(parsed.dnd ?? {}),
+        },
+        remoteNotify: {
+          ...defaults.remoteNotify,
+          ...(parsed.remoteNotify ?? {}),
         },
       };
     } catch {

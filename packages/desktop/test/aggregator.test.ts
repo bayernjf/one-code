@@ -166,8 +166,9 @@ test('Aggregator: 超过最短工作时长则通知', () => {
   agg.onNotify((n) => notifies.push(n.type));
 
   agg.handleEvent({ source: MonitorSource.Codex, type: 'activity', authority: 'session' });
-  // 把起点往前挪 31 秒，等价于任务跑了 31 秒
-  (agg as unknown as { workingSince: Date }).workingSince = new Date(Date.now() - 31_000);
+  // 把该 session 的起点往前挪 31 秒，等价于任务跑了 31 秒
+  const sessions = (agg as unknown as { sessions: Map<MonitorSource, { workingSince: Date }> }).sessions;
+  sessions.get(MonitorSource.Codex)!.workingSince = new Date(Date.now() - 31_000);
   agg.handleEvent({ source: MonitorSource.Codex, type: 'done', authority: 'session' });
 
   assert.deepEqual(notifies, ['done']);
@@ -180,7 +181,8 @@ test('Aggregator: 没观察到起点时时长未知，照常通知', () => {
 
   // 探针刚重启，只收到 done：宁可通知也不要漏
   agg.handleEvent({ source: MonitorSource.ShellHook, type: 'activity', authority: 'session' });
-  (agg as unknown as { workingSince: Date | undefined }).workingSince = undefined;
+  const sessions = (agg as unknown as { sessions: Map<MonitorSource, { workingSince: Date | undefined }> }).sessions;
+  sessions.get(MonitorSource.ShellHook)!.workingSince = undefined;
   agg.handleEvent({ source: MonitorSource.ShellHook, type: 'done', authority: 'session' });
 
   assert.deepEqual(notifies, ['done']);
@@ -196,4 +198,97 @@ test('Aggregator: waiting 不受最短工作时长限制', () => {
 
   // 「卡住等你输入」无论多快发生都该通知：你被堵着
   assert.deepEqual(notifies, ['waiting']);
+});
+
+// ── 多会话专项 ──────────────────────────────────────────────
+
+function hackSessions(agg: Aggregator) {
+  return (agg as unknown as { sessions: Map<MonitorSource, { workingSince: Date | undefined; lastDoneAt: number }> }).sessions;
+}
+
+test('Aggregator: 并发 working，workingDuration 取最长者', () => {
+  const agg = makeAggregator();
+  const sessions = hackSessions(agg);
+
+  agg.handleEvent({ source: MonitorSource.Codex, type: 'activity', authority: 'session' });
+  sessions.get(MonitorSource.Codex)!.workingSince = new Date(Date.now() - 60_000);
+  agg.handleEvent({ source: MonitorSource.Claude, type: 'activity' });
+  sessions.get(MonitorSource.Claude)!.workingSince = new Date(Date.now() - 10_000);
+
+  assert.equal(agg.currentStatus, AIStatus.Working);
+  assert.ok(agg.workingDuration >= 55_000, '应取最长的 60s session，实际 ' + agg.workingDuration);
+});
+
+test('Aggregator: 多会话独立防抖（不跨来源合并）', () => {
+  const agg = makeAggregator();
+  const notifies: string[] = [];
+  agg.onNotify((n) => notifies.push(`${n.type}:${n.source}`));
+
+  agg.handleEvent({ source: MonitorSource.Codex, type: 'activity', authority: 'session' });
+  agg.handleEvent({ source: MonitorSource.Codex, type: 'done', authority: 'session' });
+  // 紧接着另一个来源完成，不应被前一个的防抖吃掉
+  agg.handleEvent({ source: MonitorSource.Claude, type: 'activity' });
+  agg.handleEvent({ source: MonitorSource.Claude, type: 'done' });
+
+  assert.deepEqual(notifies, [`done:${MonitorSource.Codex}`, `done:${MonitorSource.Claude}`]);
+});
+
+test('Aggregator: 多会话独立最短工作时长门槛', () => {
+  const agg = makeAggregator(30);
+  const notifies: string[] = [];
+  agg.onNotify((n) => notifies.push(`${n.type}:${n.source}`));
+  const sessions = hackSessions(agg);
+
+  agg.handleEvent({ source: MonitorSource.Codex, type: 'activity', authority: 'session' });
+  sessions.get(MonitorSource.Codex)!.workingSince = new Date(Date.now() - 5_000); // 5秒 < 30秒
+  agg.handleEvent({ source: MonitorSource.Codex, type: 'done', authority: 'session' });
+
+  agg.handleEvent({ source: MonitorSource.Claude, type: 'activity' });
+  sessions.get(MonitorSource.Claude)!.workingSince = new Date(Date.now() - 60_000); // 60秒 > 30秒
+  agg.handleEvent({ source: MonitorSource.Claude, type: 'done' });
+
+  assert.deepEqual(notifies, [`done:${MonitorSource.Claude}`], '只有超过门槛的 Claude 通知');
+});
+
+test('Aggregator: 全局聚合优先级 waiting > working > done', () => {
+  const agg = makeAggregator();
+
+  // Codex working + FileWatcher done → 全局 working
+  agg.handleEvent({ source: MonitorSource.Codex, type: 'activity', authority: 'session' });
+  agg.handleEvent({ source: MonitorSource.FileWatcher, type: 'activity' });
+  agg.handleEvent({ source: MonitorSource.FileWatcher, type: 'done' });
+  assert.equal(agg.currentStatus, AIStatus.Working, 'working 优先级高于 done');
+
+  // FileWatcher 转入 waiting → 全局 waiting（需要用户操作最紧急）
+  agg.handleEvent({ source: MonitorSource.FileWatcher, type: 'activity' });
+  agg.handleEvent({ source: MonitorSource.FileWatcher, type: 'waiting' });
+  assert.equal(agg.currentStatus, AIStatus.Waiting, 'waiting 优先级高于 working');
+});
+
+test('Aggregator: acknowledge 清除所有 done/waiting session', () => {
+  const agg = makeAggregator();
+
+  agg.handleEvent({ source: MonitorSource.Codex, type: 'activity', authority: 'session' });
+  agg.handleEvent({ source: MonitorSource.Codex, type: 'done', authority: 'session' });
+  agg.handleEvent({ source: MonitorSource.Claude, type: 'waiting' });
+
+  assert.equal(agg.currentStatus, AIStatus.Waiting);
+  assert.equal(agg.getActiveSessions().length, 2);
+
+  agg.acknowledge();
+  assert.equal(agg.currentStatus, AIStatus.Idle);
+  assert.deepEqual(agg.getActiveSessions(), []);
+});
+
+test('Aggregator: getActiveSessions 返回非 idle 会话', () => {
+  const agg = makeAggregator();
+
+  agg.handleEvent({ source: MonitorSource.Codex, type: 'activity', authority: 'session' });
+  agg.handleEvent({ source: MonitorSource.Claude, type: 'activity' });
+  agg.handleEvent({ source: MonitorSource.Claude, type: 'done' });
+
+  const active = agg.getActiveSessions();
+  assert.equal(active.length, 2);
+  const sources = active.map((s) => s.source).sort();
+  assert.deepEqual(sources, [MonitorSource.Claude, MonitorSource.Codex]);
 });

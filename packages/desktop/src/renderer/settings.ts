@@ -12,6 +12,7 @@ interface WatchTarget {
   watchDirs: string[];
   processPatterns: string[];
   enabled: boolean;
+  notifyEnabled: boolean;
 }
 
 interface DesktopConfig {
@@ -19,6 +20,22 @@ interface DesktopConfig {
   windowSize: number;
   activityThreshold: number;
   silenceTimeout: number;
+  minWorkDuration: number;
+  autoStart: boolean;
+  globalShortcut: string;
+  notifyOnlyOnBlur: boolean;
+  dnd: {
+    enabled: boolean;
+    scheduleEnabled: boolean;
+    scheduleStart: string;
+    scheduleEnd: string;
+    onlyWaiting: boolean;
+  };
+  remoteNotify: {
+    webhookUrl: string;
+    ntfyTopic: string;
+    ntfyServer: string;
+  };
   companion: { enabled: boolean; socketPath: string };
 }
 
@@ -49,10 +66,34 @@ const targetsEl = document.getElementById('targets')!;
 const windowSizeEl = document.getElementById('windowSize') as HTMLInputElement;
 const activityThresholdEl = document.getElementById('activityThreshold') as HTMLInputElement;
 const silenceTimeoutEl = document.getElementById('silenceTimeout') as HTMLInputElement;
+const minWorkDurationEl = document.getElementById('minWorkDuration') as HTMLInputElement;
 const saveBtn = document.getElementById('save') as HTMLButtonElement;
 const resetBtn = document.getElementById('reset') as HTMLButtonElement;
 const companionEnabledEl = document.getElementById('companionEnabled') as HTMLInputElement;
 const companionSocketEl = document.getElementById('companionSocket')!;
+const autoStartEl = document.getElementById('autoStart') as HTMLInputElement;
+const globalShortcutEl = document.getElementById('globalShortcut') as HTMLInputElement;
+const notifyOnlyOnBlurEl = document.getElementById('notifyOnlyOnBlur') as HTMLInputElement;
+const dndEnabledEl = document.getElementById('dndEnabled') as HTMLInputElement;
+const dndScheduleEnabledEl = document.getElementById('dndScheduleEnabled') as HTMLInputElement;
+const dndStartEl = document.getElementById('dndStart') as HTMLInputElement;
+const dndEndEl = document.getElementById('dndEnd') as HTMLInputElement;
+const dndOnlyWaitingEl = document.getElementById('dndOnlyWaiting') as HTMLInputElement;
+const webhookUrlEl = document.getElementById('webhookUrl') as HTMLInputElement;
+const ntfyTopicEl = document.getElementById('ntfyTopic') as HTMLInputElement;
+const ntfyServerEl = document.getElementById('ntfyServer') as HTMLInputElement;
+
+/** 内置目标 id（不可删除） */
+const BUILTIN_TARGET_IDS = new Set(['vscode', 'cursor', 'claude', 'codex', 'terminal']);
+
+// 自定义目标表单
+const customFormEl = document.getElementById('custom-form')!;
+const showCustomFormBtn = document.getElementById('show-custom-form')!;
+const customAddBtn = document.getElementById('custom-add') as HTMLButtonElement;
+const customCancelBtn = document.getElementById('custom-cancel') as HTMLButtonElement;
+const customNameEl = document.getElementById('custom-name') as HTMLInputElement;
+const customProcessEl = document.getElementById('custom-process') as HTMLInputElement;
+const customDirEl = document.getElementById('custom-dir') as HTMLInputElement;
 
 function renderTargets(): void {
   targetsEl.innerHTML = '';
@@ -74,8 +115,34 @@ function renderTargets(): void {
     name.className = 'target-name';
     name.textContent = target.name;
 
+    const notifyLabel = document.createElement('span');
+    notifyLabel.style.cssText = 'margin-left:auto;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:4px;';
+    notifyLabel.appendChild(document.createTextNode('通知'));
+    const notifyCheckbox = document.createElement('input');
+    notifyCheckbox.type = 'checkbox';
+    notifyCheckbox.checked = target.notifyEnabled;
+    notifyCheckbox.style.cssText = 'width:13px;height:13px;accent-color:var(--accent);';
+    notifyCheckbox.addEventListener('change', () => {
+      target.notifyEnabled = notifyCheckbox.checked;
+    });
+    notifyLabel.appendChild(notifyCheckbox);
+
     row.appendChild(checkbox);
     row.appendChild(name);
+    row.appendChild(notifyLabel);
+
+    // 自定义目标显示删除按钮
+    if (!BUILTIN_TARGET_IDS.has(target.id)) {
+      const delBtn = document.createElement('button');
+      delBtn.textContent = '删除';
+      delBtn.style.cssText = 'background:transparent;border:1px solid var(--border);color:#ef4444;border-radius:4px;padding:2px 8px;font-size:11px;cursor:pointer;';
+      delBtn.addEventListener('click', () => {
+        config.targets = config.targets.filter((t) => t.id !== target.id);
+        renderTargets();
+      });
+      row.appendChild(delBtn);
+    }
+
     div.appendChild(row);
 
     if (target.watchDirs.length > 0) {
@@ -93,11 +160,32 @@ function renderSensitivity(): void {
   windowSizeEl.value = String(config.windowSize);
   activityThresholdEl.value = String(config.activityThreshold);
   silenceTimeoutEl.value = String(config.silenceTimeout);
+  minWorkDurationEl.value = String(config.minWorkDuration);
 }
 
 function renderCompanion(): void {
   companionEnabledEl.checked = config.companion.enabled;
   companionSocketEl.textContent = `socket: ${config.companion.socketPath}`;
+}
+
+function renderGeneral(): void {
+  autoStartEl.checked = config.autoStart;
+  globalShortcutEl.value = config.globalShortcut;
+  notifyOnlyOnBlurEl.checked = config.notifyOnlyOnBlur;
+}
+
+function renderDnd(): void {
+  dndEnabledEl.checked = config.dnd.enabled;
+  dndScheduleEnabledEl.checked = config.dnd.scheduleEnabled;
+  dndStartEl.value = config.dnd.scheduleStart;
+  dndEndEl.value = config.dnd.scheduleEnd;
+  dndOnlyWaitingEl.checked = config.dnd.onlyWaiting;
+}
+
+function renderRemoteNotify(): void {
+  webhookUrlEl.value = config.remoteNotify.webhookUrl;
+  ntfyTopicEl.value = config.remoteNotify.ntfyTopic;
+  ntfyServerEl.value = config.remoteNotify.ntfyServer;
 }
 
 function collect(): DesktopConfig {
@@ -106,9 +194,65 @@ function collect(): DesktopConfig {
     windowSize: Number(windowSizeEl.value),
     activityThreshold: Number(activityThresholdEl.value),
     silenceTimeout: Number(silenceTimeoutEl.value),
+    minWorkDuration: Number(minWorkDurationEl.value),
+    autoStart: autoStartEl.checked,
+    globalShortcut: globalShortcutEl.value.trim(),
+    notifyOnlyOnBlur: notifyOnlyOnBlurEl.checked,
+    dnd: {
+      enabled: dndEnabledEl.checked,
+      scheduleEnabled: dndScheduleEnabledEl.checked,
+      scheduleStart: dndStartEl.value.trim() || '22:00',
+      scheduleEnd: dndEndEl.value.trim() || '08:00',
+      onlyWaiting: dndOnlyWaitingEl.checked,
+    },
+    remoteNotify: {
+      webhookUrl: webhookUrlEl.value.trim(),
+      ntfyTopic: ntfyTopicEl.value.trim(),
+      ntfyServer: ntfyServerEl.value.trim() || 'https://ntfy.sh',
+    },
     companion: { ...config.companion, enabled: companionEnabledEl.checked },
   };
 }
+
+// ---- 自定义目标表单 ----
+showCustomFormBtn.addEventListener('click', () => {
+  customFormEl.style.display = 'block';
+  showCustomFormBtn.style.display = 'none';
+  customNameEl.focus();
+});
+
+customCancelBtn.addEventListener('click', () => {
+  customFormEl.style.display = 'none';
+  showCustomFormBtn.style.display = 'block';
+  customNameEl.value = '';
+  customProcessEl.value = '';
+  customDirEl.value = '';
+});
+
+customAddBtn.addEventListener('click', () => {
+  const name = customNameEl.value.trim();
+  if (!name) {
+    customNameEl.style.borderColor = '#ef4444';
+    return;
+  }
+  const processStr = customProcessEl.value.trim();
+  const dirStr = customDirEl.value.trim();
+  const newTarget: WatchTarget = {
+    id: `custom-${Date.now()}`,
+    name,
+    watchDirs: dirStr ? dirStr.split(',').map((s) => s.trim()).filter(Boolean) : [],
+    processPatterns: processStr ? processStr.split(',').map((s) => s.trim()).filter(Boolean) : [],
+    enabled: true,
+    notifyEnabled: true,
+  };
+  config.targets.push(newTarget);
+  renderTargets();
+  customFormEl.style.display = 'none';
+  showCustomFormBtn.style.display = 'block';
+  customNameEl.value = '';
+  customProcessEl.value = '';
+  customDirEl.value = '';
+});
 
 saveBtn.addEventListener('click', async () => {
   saveBtn.disabled = true;
@@ -124,6 +268,9 @@ resetBtn.addEventListener('click', async () => {
   renderTargets();
   renderSensitivity();
   renderCompanion();
+  renderGeneral();
+  renderDnd();
+  renderRemoteNotify();
 });
 
 // ---- 关于 / 更新 ----
@@ -174,6 +321,9 @@ async function init(): Promise<void> {
   renderTargets();
   renderSensitivity();
   renderCompanion();
+  renderGeneral();
+  renderDnd();
+  renderRemoteNotify();
   renderUpdater();
 }
 

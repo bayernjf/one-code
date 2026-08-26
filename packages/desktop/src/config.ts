@@ -15,6 +15,8 @@ export interface WatchTarget {
   processPatterns: string[];
   /** 是否启用 */
   enabled: boolean;
+  /** 是否启用该目标的通知 */
+  notifyEnabled: boolean;
 }
 
 /** Shell Hook 配置（精确终端监控） */
@@ -49,6 +51,30 @@ export interface CompanionConfig {
   socketPath: string;
 }
 
+/** 勿扰模式配置 */
+export interface DndConfig {
+  /** 手动开关（优先级最高） */
+  enabled: boolean;
+  /** 是否启用定时时段 */
+  scheduleEnabled: boolean;
+  /** 时段开始（HH:MM） */
+  scheduleStart: string;
+  /** 时段结束（HH:MM），可跨午夜 */
+  scheduleEnd: string;
+  /** 勿扰期间是否仍通知 waiting（等待输入可能阻塞 AI，比 done 更紧急） */
+  onlyWaiting: boolean;
+}
+
+/** 远程通知配置 */
+export interface RemoteNotifyConfig {
+  /** Webhook URL（留空禁用） */
+  webhookUrl: string;
+  /** ntfy topic（留空禁用） */
+  ntfyTopic: string;
+  /** ntfy 服务器地址（默认 https://ntfy.sh） */
+  ntfyServer: string;
+}
+
 export interface DesktopConfig {
   targets: WatchTarget[];
   /** 灵敏度（与扩展侧语义一致） */
@@ -57,6 +83,12 @@ export interface DesktopConfig {
   silenceTimeout: number;
   /** 短于此时长的任务不发完成通知（秒）；0 表示不设门槛 */
   minWorkDuration: number;
+  /** 开机自启 */
+  autoStart: boolean;
+  /** 全局快捷键（显示当前状态），空字符串表示不注册 */
+  globalShortcut: string;
+  /** 仅在 AI 工具失焦时通知（工具在前台时不弹通知） */
+  notifyOnlyOnBlur: boolean;
   /** Shell Hook 精确终端信号 */
   shellHook: ShellHookConfig;
   /** Claude 会话 jsonl 探针 */
@@ -65,6 +97,10 @@ export interface DesktopConfig {
   codex: CodexConfig;
   /** 伴侣深度信号 */
   companion: CompanionConfig;
+  /** 勿扰模式 */
+  dnd: DndConfig;
+  /** 远程通知 */
+  remoteNotify: RemoteNotifyConfig;
 }
 
 /** 默认精确捕获的终端 AI CLI 命令名（与 zsh 片段保持一致） */
@@ -86,6 +122,7 @@ export const DEFAULT_TARGETS: WatchTarget[] = [
     watchDirs: [],
     processPatterns: ['Visual Studio Code', 'Code Helper', 'code'],
     enabled: true,
+    notifyEnabled: true,
   },
   {
     id: 'cursor',
@@ -93,6 +130,7 @@ export const DEFAULT_TARGETS: WatchTarget[] = [
     watchDirs: [],
     processPatterns: ['Cursor', 'cursor'],
     enabled: true,
+    notifyEnabled: true,
   },
   {
     id: 'claude',
@@ -100,6 +138,7 @@ export const DEFAULT_TARGETS: WatchTarget[] = [
     watchDirs: [],
     processPatterns: ['Claude', 'claude'],
     enabled: true,
+    notifyEnabled: true,
   },
   {
     // 进程名不参与判定：ChatGPT.app 常驻后台，进程存在不等于在干活，
@@ -109,6 +148,7 @@ export const DEFAULT_TARGETS: WatchTarget[] = [
     watchDirs: [],
     processPatterns: [],
     enabled: true,
+    notifyEnabled: true,
   },
   {
     id: 'terminal',
@@ -116,16 +156,20 @@ export const DEFAULT_TARGETS: WatchTarget[] = [
     watchDirs: [],
     processPatterns: ['Terminal', 'iTerm', 'alacritty', 'kitty'],
     enabled: true,
+    notifyEnabled: true,
   },
 ];
 
 export function getDefaultConfig(): DesktopConfig {
   return {
-    targets: DEFAULT_TARGETS.map((t) => ({ ...t, watchDirs: [...t.watchDirs], processPatterns: [...t.processPatterns] })),
+    targets: DEFAULT_TARGETS.map((t) => ({ ...t, watchDirs: [...t.watchDirs], processPatterns: [...t.processPatterns], notifyEnabled: t.notifyEnabled })),
     windowSize: 3,
     activityThreshold: 3,
     silenceTimeout: 8,
     minWorkDuration: 30,
+    autoStart: false,
+    globalShortcut: 'Alt+Command+W',
+    notifyOnlyOnBlur: false,
     shellHook: {
       enabled: true,
       stateFile: shellHookStateFile(),
@@ -141,6 +185,18 @@ export function getDefaultConfig(): DesktopConfig {
     companion: {
       enabled: true,
       socketPath: companionSocketPath(),
+    },
+    dnd: {
+      enabled: false,
+      scheduleEnabled: false,
+      scheduleStart: '22:00',
+      scheduleEnd: '08:00',
+      onlyWaiting: false,
+    },
+    remoteNotify: {
+      webhookUrl: '',
+      ntfyTopic: '',
+      ntfyServer: 'https://ntfy.sh',
     },
   };
 }
