@@ -10,11 +10,13 @@ interface ActivityRecord {
   durationMs: number;
 }
 
-interface Window {
-  historyAPI: {
-    getRecords: () => Promise<ActivityRecord[]>;
-    clear: () => Promise<boolean>;
-  };
+declare global {
+  interface Window {
+    historyAPI: {
+      getRecords: () => Promise<ActivityRecord[]>;
+      clear: () => Promise<boolean>;
+    };
+  }
 }
 
 /** 与 core 包 sourceName.ts 保持一致的映射（渲染进程无法 import node 包） */
@@ -101,3 +103,5 @@ clearBtn.addEventListener('click', async () => {
 });
 
 load();
+
+export {};

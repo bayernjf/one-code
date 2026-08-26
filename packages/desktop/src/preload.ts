@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron';
 import { DesktopConfig } from './config';
 import type { UpdaterCheckResult, UpdaterStatus } from './updater';
 import type { ActivityRecord } from './activityLog';
+import type { StatsData } from './statsWindow';
 
 /**
  * 预加载脚本：通过 contextBridge 暴露最小化的 IPC 接口给渲染进程
@@ -19,4 +20,8 @@ contextBridge.exposeInMainWorld('settingsAPI', {
 contextBridge.exposeInMainWorld('historyAPI', {
   getRecords: (): Promise<ActivityRecord[]> => ipcRenderer.invoke('history:get'),
   clear: (): Promise<boolean> => ipcRenderer.invoke('history:clear'),
+});
+
+contextBridge.exposeInMainWorld('statsAPI', {
+  getStats: (): Promise<StatsData> => ipcRenderer.invoke('stats:get'),
 });
