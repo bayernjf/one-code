@@ -53,11 +53,29 @@ type UpdaterCheckResult =
 interface Window {
   settingsAPI: {
     getConfig: () => Promise<DesktopConfig>;
-    saveConfig: (config: DesktopConfig) => Promise<boolean>;
+    /** ok=false 时带可读的非法模式错误列表，配置未落盘 */
+    saveConfig: (config: DesktopConfig) => Promise<{ ok: boolean; errors?: string[] }>;
     checkForUpdates: () => Promise<UpdaterCheckResult>;
     getUpdaterStatus: () => Promise<UpdaterStatus>;
     quitAndInstall: () => Promise<{ ok: boolean; reason?: string }>;
   };
+}
+
+/**
+ * 渲染进程侧的模式自检（与主进程 patternValidation 同规则，独立声明避免跨包
+ * import）：用于自定义表单即时提示与已加载配置的标红。主进程 settings:save
+ * 仍是权威闸门。
+ */
+const MAX_PATTERN_LENGTH = 200;
+function patternError(pattern: string): string | null {
+  if (!pattern.trim()) return '模式为空';
+  if (pattern.length > MAX_PATTERN_LENGTH) return `模式超过 ${MAX_PATTERN_LENGTH} 字符上限`;
+  try {
+    new RegExp(pattern, 'i');
+    return null;
+  } catch (err) {
+    return err instanceof Error ? err.message : String(err);
+  }
 }
 
 let config: DesktopConfig;
@@ -68,6 +86,7 @@ const activityThresholdEl = document.getElementById('activityThreshold') as HTML
 const silenceTimeoutEl = document.getElementById('silenceTimeout') as HTMLInputElement;
 const minWorkDurationEl = document.getElementById('minWorkDuration') as HTMLInputElement;
 const saveBtn = document.getElementById('save') as HTMLButtonElement;
+const saveErrorEl = document.getElementById('save-error')!;
 const resetBtn = document.getElementById('reset') as HTMLButtonElement;
 const companionEnabledEl = document.getElementById('companionEnabled') as HTMLInputElement;
 const companionSocketEl = document.getElementById('companionSocket')!;
@@ -144,6 +163,17 @@ function renderTargets(): void {
     }
 
     div.appendChild(row);
+
+    // 自愈路径（2026-11-02 评审 P1-1）：修复前落盘或手工编辑的脏配置可能
+    // 仍含非法模式；主进程探针已跳过它们，这里标红让用户能定位并删除。
+    const badPatterns = target.processPatterns.filter((p) => patternError(p) !== null);
+    if (badPatterns.length > 0) {
+      div.style.cssText = 'border:1px solid #ef4444;border-radius:6px;padding:4px;';
+      const warning = document.createElement('div');
+      warning.style.cssText = 'color:#ef4444;font-size:11px;margin-top:2px;';
+      warning.textContent = `非法进程模式已被忽略：${badPatterns.join('、')}（删除该目标后可正常保存）`;
+      div.appendChild(warning);
+    }
 
     if (target.watchDirs.length > 0) {
       const dirs = document.createElement('div');
@@ -237,11 +267,21 @@ customAddBtn.addEventListener('click', () => {
   }
   const processStr = customProcessEl.value.trim();
   const dirStr = customDirEl.value.trim();
+  // 写入侧校验的即时层：非法模式在表单内即被拦下（主进程保存时仍会复核）
+  const patterns = processStr ? processStr.split(',').map((s) => s.trim()).filter(Boolean) : [];
+  const firstBad = patterns.map((p) => ({ p, reason: patternError(p) })).find((entry) => entry.reason !== null);
+  if (firstBad) {
+    customProcessEl.style.borderColor = '#ef4444';
+    customProcessEl.title = `非法正则 "${firstBad.p}"：${firstBad.reason}`;
+    return;
+  }
+  customProcessEl.style.borderColor = '';
+  customProcessEl.title = '';
   const newTarget: WatchTarget = {
     id: `custom-${Date.now()}`,
     name,
     watchDirs: dirStr ? dirStr.split(',').map((s) => s.trim()).filter(Boolean) : [],
-    processPatterns: processStr ? processStr.split(',').map((s) => s.trim()).filter(Boolean) : [],
+    processPatterns: patterns,
     enabled: true,
     notifyEnabled: true,
   };
@@ -257,8 +297,15 @@ customAddBtn.addEventListener('click', () => {
 saveBtn.addEventListener('click', async () => {
   saveBtn.disabled = true;
   config = collect();
-  await window.settingsAPI.saveConfig(config);
+  const result = await window.settingsAPI.saveConfig(config);
   saveBtn.disabled = false;
+  if (!result.ok) {
+    // 主进程拒绝了保存（非法模式）：配置未落盘，错误逐条展示，不自欺为成功
+    saveErrorEl.textContent = (result.errors ?? ['保存被拒绝']).join('\n');
+    saveErrorEl.style.display = 'block';
+    return;
+  }
+  saveErrorEl.style.display = 'none';
   saveBtn.textContent = '已保存';
   setTimeout(() => (saveBtn.textContent = '保存'), 1200);
 });
