@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
-import { getConfig, onConfigChange } from './config';
+import { getConfig, onConfigChange, WatchdogConfig } from './config';
+import { planConfigChange } from './configPlanner';
 import { AIStatus, MonitorEvent, MonitorSource } from './monitors/types';
 import { FileWatcherMonitor } from './monitors/fileWatcher';
 import { TerminalWatcherMonitor } from './monitors/terminalWatcher';
@@ -28,10 +29,13 @@ let activityPanel: ActivityPanel;
 let companionClient: CompanionClient | undefined;
 let enabled = true;
 let lastChangedFiles: string[] = [];
+// 上一份生效配置：onConfigChange 据此 diff 出需要重建的组件（评审 P2-3）
+let currentConfig: WatchdogConfig;
 
 export function activate(context: vscode.ExtensionContext): void {
   const config = getConfig();
   enabled = config.enabled;
+  currentConfig = config;
 
   // 初始化核心组件
   stateMachine = new AIStateMachine();
@@ -93,15 +97,20 @@ export function activate(context: vscode.ExtensionContext): void {
   // 监听配置变更
   context.subscriptions.push(
     onConfigChange((newConfig) => {
-      if (newConfig.companion.enabled && !companionClient) {
-        companionClient = new CompanionClient(newConfig.companion.socketPath || undefined);
-        companionClient.connect();
-      } else if (!newConfig.companion.enabled && companionClient) {
+      // 评审 P2-3：按 diff 计划重建受影响组件，改了不再必须 reload window
+      const plan = planConfigChange(currentConfig, newConfig);
+
+      if (plan.stopCompanion && companionClient) {
         companionClient.dispose();
         companionClient = undefined;
       }
+      if (plan.startCompanion || plan.reconnectCompanion) {
+        companionClient?.dispose();
+        companionClient = new CompanionClient(newConfig.companion.socketPath || undefined);
+        companionClient.connect();
+      }
 
-      if (newConfig.enabled !== enabled) {
+      if (plan.enabledToggled) {
         enabled = newConfig.enabled;
         if (enabled) {
           startMonitors();
@@ -111,7 +120,13 @@ export function activate(context: vscode.ExtensionContext): void {
           notifier.notifyToggle(false);
           stateMachine.reset();
         }
+      } else if (enabled && plan.restartMonitors) {
+        // watchPatterns / ignorePatterns / monitors.* / 窗口参数变更：重建监控器即时生效
+        stopMonitors();
+        startMonitors();
       }
+
+      currentConfig = newConfig;
     })
   );
 
