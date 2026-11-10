@@ -10,7 +10,9 @@ import type { NotificationRecord } from './notificationLog';
  */
 contextBridge.exposeInMainWorld('settingsAPI', {
   getConfig: (): Promise<DesktopConfig> => ipcRenderer.invoke('settings:get'),
-  saveConfig: (config: DesktopConfig): Promise<boolean> => ipcRenderer.invoke('settings:save', config),
+  // 保存结果：ok=false 时带可读的非法模式错误列表，配置未落盘
+  saveConfig: (config: DesktopConfig): Promise<{ ok: boolean; errors?: string[] }> =>
+    ipcRenderer.invoke('settings:save', config),
 
   // 更新相关
   checkForUpdates: (): Promise<UpdaterCheckResult> => ipcRenderer.invoke('updater:check'),

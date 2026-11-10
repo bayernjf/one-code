@@ -21,14 +21,14 @@
     "@ai-watchdog/core": "0.1.0",
     "chokidar": "^3.6.0",
     "electron-updater": "^6.3.0",
-    "node-notifier": "^10.0.1"
+    "node-notifier": "^12.1.0"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
     "@types/node-notifier": "^8.0.5",
     "cross-env": "^7.0.3",
-    "electron": "31.7.7",
-    "electron-builder": "^24.13.3",
+    "electron": "45.2.1",
+    "electron-builder": "^26.18.0",
     "tsx": "^4.19.0",
     "typescript": "^5.3.0"
   },

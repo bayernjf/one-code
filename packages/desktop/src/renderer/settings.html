@@ -101,6 +101,8 @@
       background: var(--bg);
       display: flex;
       justify-content: flex-end;
+      align-items: center;
+      flex-wrap: wrap;
       gap: 10px;
     }
     button {
@@ -257,6 +259,7 @@
   </main>
 
   <footer>
+    <div id="save-error" style="display:none;color:#ef4444;font-size:12px;white-space:pre-line;margin-bottom:8px;flex-basis:100%;text-align:right;"></div>
     <button id="reset">恢复默认</button>
     <button id="save">保存</button>
   </footer>

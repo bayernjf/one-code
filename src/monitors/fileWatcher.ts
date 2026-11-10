@@ -16,6 +16,9 @@ export class FileWatcherMonitor implements IMonitor {
   readonly onActivity = this._onActivity.event;
 
   private watchers: vscode.FileSystemWatcher[] = [];
+  // watcher 作用域的监听器（含 onDidSaveTextDocument）：随 createWatchers 重建而释放，
+  // 避免 stop→start（配置变更重建，评审 P2-3）时保存监听器逐次叠加导致事件翻倍
+  private watcherDisposables: vscode.Disposable[] = [];
   private editDetector: RapidEditDetector | undefined;
   private silenceTimer: NodeJS.Timeout | undefined;
   private isWorking = false;
@@ -48,15 +51,15 @@ export class FileWatcherMonitor implements IMonitor {
     for (const pattern of patterns) {
       const watcher = vscode.workspace.createFileSystemWatcher(pattern);
 
-      watcher.onDidChange((uri) => this.handleFileChange(uri), this, this.disposables);
-      watcher.onDidCreate((uri) => this.handleFileChange(uri), this, this.disposables);
-      watcher.onDidDelete((uri) => this.handleFileChange(uri), this, this.disposables);
+      watcher.onDidChange((uri) => this.handleFileChange(uri), this, this.watcherDisposables);
+      watcher.onDidCreate((uri) => this.handleFileChange(uri), this, this.watcherDisposables);
+      watcher.onDidDelete((uri) => this.handleFileChange(uri), this, this.watcherDisposables);
 
       this.watchers.push(watcher);
     }
 
     // 同时监控文档保存事件（更精确）
-    this.disposables.push(
+    this.watcherDisposables.push(
       vscode.workspace.onDidSaveTextDocument((doc) => {
         this.handleFileChange(doc.uri);
       })
@@ -131,5 +134,7 @@ export class FileWatcherMonitor implements IMonitor {
   private disposeWatchers(): void {
     this.watchers.forEach((w) => w.dispose());
     this.watchers = [];
+    this.watcherDisposables.forEach((d) => d.dispose());
+    this.watcherDisposables = [];
   }
 }

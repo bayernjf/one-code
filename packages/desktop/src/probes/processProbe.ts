@@ -2,6 +2,7 @@ import { EventEmitter } from 'node:events';
 import { execFile as execFileImpl } from 'node:child_process';
 import { MonitorSource, MonitorEvent } from '@ai-watchdog/core';
 import { Probe } from './probe';
+import { validatePattern } from '../patternValidation';
 
 /** execFile 签名（便于测试注入 mock） */
 type ExecFileFn = (
@@ -36,13 +37,30 @@ export class ProcessProbe implements Probe {
   private emitter = new EventEmitter();
   private timer: NodeJS.Timeout | undefined;
   private lastActive = false;
+  /** 预编译后的合法模式（构造时逐条校验，非法模式隔离在外） */
+  private matchers: RegExp[] = [];
+  /** 被跳过的非法模式（构造时记录一次，供设置页标红/日志排查） */
+  private readonly skippedPatterns: string[] = [];
 
   constructor(
-    private processPatterns: string[],
+    processPatterns: string[],
     private intervalMs: number = 3000,
     private execFile: ExecFileFn = execFileImpl,
     private platform: string = process.platform
-  ) {}
+  ) {
+    // 读取侧容错（2026-11-02 评审 P1-1）：配置可能来自修复前落盘的脏数据
+    // 或手工编辑，逐条预编译；非法模式跳过并记录一次，绝不让 new RegExp
+    // 的 SyntaxError 进入轮询回调（那里抛出会变成主进程 uncaughtException）。
+    for (const pattern of processPatterns) {
+      const reason = validatePattern(pattern);
+      if (reason) {
+        this.skippedPatterns.push(pattern);
+        console.error(`[ProcessProbe] skipping invalid process pattern ${JSON.stringify(pattern)}: ${reason}`);
+        continue;
+      }
+      this.matchers.push(new RegExp(pattern, 'i'));
+    }
+  }
 
   start(): void {
     this.timer = setInterval(() => this.poll(), this.intervalMs);
@@ -64,16 +82,18 @@ export class ProcessProbe implements Probe {
     return this.lastActive;
   }
 
+  /** 构造时被隔离的非法模式（每次调用返回副本） */
+  getSkippedPatterns(): string[] {
+    return [...this.skippedPatterns];
+  }
+
   private poll(): void {
     const { cmd, args } = processListCommand(this.platform);
     this.execFile(cmd, args, { maxBuffer: 10 * 1024 * 1024 }, (err, stdout) => {
       if (err) {
         return;
       }
-      const active = this.processPatterns.some((pattern) => {
-        const re = new RegExp(pattern, 'i');
-        return stdout.split('\n').some((line) => re.test(line));
-      });
+      const active = this.matchers.some((re) => stdout.split('\n').some((line) => re.test(line)));
 
       if (active !== this.lastActive) {
         this.lastActive = active;

@@ -23,6 +23,14 @@ function tokenMatches(expected: string, received: string): boolean {
  * 匹配，否则立即断开。事件保留帧内 source，喂给聚合引擎与其他探针同等处理。
  *
  * 信号分级（design.md §4）留在信号源侧：伴侣只上报自认为够强的信号。
+ *
+ * 威胁模型声明（评审 2026-11-02 P2-4）：本组件的边界是「同用户单机」。
+ * - Unix：socket 文件 0600 + 目录 0700，其他用户无法连接。
+ * - Windows：命名管道无平台级 ACL（Node net 不暴露 SDDL），同机任何本地
+ *   会话进程理论上都能连上管道；鉴权完全依赖 token 文件机密性，而 token
+ *   文件在 Windows 上仅靠用户 profile 默认 ACL（`mode: 0o600` 为 no-op）。
+ *   能读到 token 的同机低权进程可伪造「工作中/完成」信号干扰通知，但不能
+ *   借此执行命令。多会话/共享机场景不满足本威胁模型，不要使用伴侣模式。
  */
 export class CompanionServer implements Probe {
   readonly source = MonitorSource.VSCodeCompanion;
